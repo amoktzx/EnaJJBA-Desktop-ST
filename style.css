@@ -258,3 +258,12 @@
 #ena-desktop-root .ena-window[data-app="notes"] .ena-window-body{overflow-y:auto;}
 #ena-desktop-root .ena-window[data-app="computer"] .ena-content{flex:0 0 auto;overflow:visible;min-height:0;}
 #ena-desktop-root .ena-window[data-app="notes"] .ena-content{flex:0 0 auto;min-height:155px;}
+
+/* v1.0 beta.2 — clickable Windows 2000 titlebar controls and sync progress */
+#ena-desktop-root .ena-window-buttons{position:relative;z-index:5;flex-shrink:0;}
+#ena-desktop-root .ena-window-buttons button{position:relative;z-index:6;touch-action:manipulation;cursor:pointer;pointer-events:auto;}
+#ena-desktop-root .ena-beta-file{display:inline-flex;align-items:center;gap:5px;max-width:260px;}
+#ena-desktop-root .ena-beta-file input{max-width:160px;font-size:11px;}
+#ena-desktop-root .ena-scan-progress{background:#edeae3;border:2px inset #999;height:20px;max-width:100%;overflow:hidden;margin-top:14px;}
+#ena-desktop-root .ena-scan-progress span{display:block;height:100%;background:#3565a2;transition:width .15s;}
+#ena-desktop-root .ena-beta-controls{flex-wrap:wrap;gap:8px;}

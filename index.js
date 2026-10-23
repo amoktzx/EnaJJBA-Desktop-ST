@@ -3,7 +3,7 @@ import { createBeta } from './beta.js';
    No generation, context injection, Memory Books or chat edits in v0.1. */
 const ENA = (() => {
   'use strict';
-  const VERSION = '1.0.0-beta.1';
+  const VERSION = '1.0.0-beta.2';
   const META_KEY = 'ena_desktop_v1';
   const SETTING_KEY = 'ena_desktop_2001';
   const ROOT = new URL('./', import.meta.url);
@@ -69,6 +69,16 @@ const ENA = (() => {
       <div class="ena-menu-slot"></div><div class="ena-calendar-slot"></div>
       <div class="ena-toast" role="status" aria-live="polite"></div></div>`;
     document.body.appendChild(root);
+    // Window controls are handled in capture phase, ahead of the application-specific
+    // delegated handlers. This prevents tabs/overlays from swallowing the close event.
+    root.addEventListener('click', ev => {
+      const control=ev.target.closest('.ena-window-buttons button[data-action]');
+      if(!control)return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+      doAction(control.dataset.action,control);
+    }, true);
     root.addEventListener('click',handleClick);
     root.addEventListener('dblclick',handleDoubleClick);
     root.addEventListener('submit',handleSubmit);
@@ -234,13 +244,23 @@ const ENA = (() => {
     const first=(new Date(y,month,1).getDay()+6)%7,days=new Date(y,month+1,0).getDate();const weeks=[];for(let i=0;i<first;i++)weeks.push('<span></span>');for(let day=1;day<=days;day++){const selected=m.gameDate===`${y}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;weeks.push(`<button type="button" data-action="day-select" data-day="${day}" data-month="${month}" data-year="${y}" class="${selected?'ena-cal-selected':''}">${day}</button>`);}const monthName=new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric'}).format(new Date(y,month,1));
     return `<div class="ena-calendar-popup"><div class="ena-cal-heading"><button data-action="cal-prev">◀</button><b>${esc(monthName)}</b><button data-action="cal-next">▶</button></div><div class="ena-cal-grid">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(s=>`<strong>${s}</strong>`).join('')}${weeks.join('')}</div><div class="ena-cal-hint">${m.gameDate?'Сюжетная дата • выбрать день':'Дата сюжета не задана. Выбери день.'}</div></div>`;
   }
-  function doAction(action,el){if(beta.action(action,el))return;const key=el.dataset.app,id=el.dataset.id;
+  function doAction(action,el){if(beta.action(action,el))return;const key=el.dataset.app||el.closest('.ena-window')?.dataset.app,id=el.dataset.id;
     if(action==='start'){ui.start=!ui.start;ui.calendar=false;renderMenus();return;}
     if(action==='calendar'){ui.calendar=!ui.calendar;ui.start=false;ui.calendarMonth=null;renderMenus();return;}
     if(action==='shutdown'){shutdown(true);return;}
     if(action==='sleep'){shutdown(false);return;}
     if(action==='open'){ui.start=false;renderMenus();openWindow(key);return;}
-    if(action==='close'){ui.windows.get(key)?.remove();ui.windows.delete(key);delete meta().apps[key];ui.active=null;saveMeta();renderTaskbar();return;}
+    if(action==='close'){
+      const win=ui.windows.get(key)||el.closest('.ena-window');
+      if(win)win.remove();
+      ui.windows.delete(key);
+      delete meta().apps[key];
+      ui.active=null;
+      saveMeta();
+      const next=[...ui.windows.keys()].at(-1);
+      if(next)focusWindow(next);else renderTaskbar();
+      return;
+    }
     if(action==='minimize'){ui.windows.get(key)?.classList.add('ena-minimized');ui.active=null;renderTaskbar();return;}
     if(action==='maximize'){const w=ui.windows.get(key);if(!w)return;w.classList.toggle('ena-maximized');focusWindow(key);return;}
     if(action==='archive-add'){archiveOpenEditor();return;}

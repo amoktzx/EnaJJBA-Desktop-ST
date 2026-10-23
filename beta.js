@@ -48,7 +48,7 @@ const p=(s)=>`<p>${encode(s)}</p>`;
 const dateTime=()=>new Date().toISOString();
 
 export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fillWindow,ui,oldComputer,oldNotes}){
-  let editor=null, filter='', extracting=false, lastChatRef=null, pendingTimer=null, lastChangeCount=0;
+  let editor=null, filter='', extracting=false, lastChatRef=null, pendingTimer=null, lastChangeCount=0, fullScanRunning=false, fullScanStop=false;
   const defaultConfig={automatic:false,interval:50,review:true,connection:'active',maxContextMessages:50};
   function state(){
     const m=meta();
@@ -56,6 +56,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     const b=m.beta;
     for(const k of ['records','proposals','history'])if(!Array.isArray(b[k]))b[k]=[];
     if(!b.schema)b.schema=1;
+    if(!b.fullScan||typeof b.fullScan!=='object')b.fullScan={cursor:0,total:0,status:'idle',added:0,blocks:0};
     if(!b.migrated){
       // Copy old manual v0.1/v0.2 records WITHOUT deleting their originals, for reversible migration.
       const map=[['salon','licenses','salon:licenses'],['salon','tasks','salon:tasks'],['salon','documents','salon:documents'],['salon','transactions','salon:finance'],['directory','people','directory:people'],['directory','places','directory:places'],['gm','injuries','gm:body'],['gm','items','gm:inventory'],['gm','quests','gm:quests']];
@@ -103,11 +104,22 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
   }
   function syncView(){const b=state(),s=settings().enaSync,c=messages();const pending=b.proposals.filter(p=>p.status==='pending');const invalid=b.records.filter(r=>r.sources?.length&&!valid(r));
     const cards=pending.map(x=>`<article class="ena-beta-proposal ${valid(x)?'':'ena-beta-invalid'}"><b>${encode(SCOPE_OPTIONS[x.scope]||x.scope)} • ${encode(x.title)}</b><p>${encode(x.detail)}</p>${x.quote?`<blockquote>${encode(x.quote)}</blockquote>`:''}<small>Источник: ${encode(x.sources?.map(z=>'#'+z.index).join(', ')||'—')} ${valid(x)?'✓ присутствует':'⚠ изменён или удалён'} · ${encode(x.confidence||'не оценена')}</small><div><button data-beta="approve" data-id="${encode(x.id)}" ${valid(x)?'':'disabled'}>Подтвердить</button><button data-beta="reject" data-id="${encode(x.id)}">Отклонить</button></div></article>`).join('');
-    return `<div class="ena-content ena-scroll ena-beta-space"><div class="ena-beta-banner"><b>Источник ИИ: активное подключение SillyTavern</b><p>Вызов через generateRaw без изменения чата и без самостоятельного переключения API-профиля.</p><p>Обработано блоков: ${b.syncRuns||0}; сообщений в чате: ${c.length}; текущая позиция: ${b.syncCursor===null?'ещё не задана':b.syncCursor}.</p></div><div class="ena-beta-controls"><button data-beta="scan-last" ${extracting?'disabled':''}>${extracting?'Проверяю…':'Проверить последние '+Number(s.interval||50)+' сообщений'}</button><button data-beta="scan-new" ${extracting?'disabled':''}>Новые сообщения</button><button data-beta="export">Экспорт</button></div><h3>Предложения (${pending.length})</h3>${cards||'<p>Нет предложений. ИИ не должен придумывать события, которых не было.</p>'}<h3>Основания после откатов (${invalid.length})</h3>${invalid.map(r=>`<p class="ena-beta-warning">⚠ ${encode(r.title)} — источник удалён или изменён, запись скрыта.</p>`).join('')||'<p>Осиротевших записей нет.</p>'}<h3>Журнал</h3><div class="ena-beta-log">${b.history.slice(0,40).map(x=>`<div><small>${encode(x.time?.slice(0,16).replace('T',' ')||'')}</small> ${encode(x.summary)}</div>`).join('')}</div></div>`;
+    const f=b.fullScan||{cursor:0,total:0,status:'idle',added:0,blocks:0};
+    const progress=f.total?Math.min(100,Math.round((f.cursor||0)/f.total*100)):0;
+    const work=fullScanRunning?`<button data-beta="scan-stop" type="button">■ Остановить после текущего блока</button>`:
+       `<button data-beta="scan-all" type="button">Проверить весь чат (${c.length} сообщений)</button>${f.cursor>0&&f.cursor<f.total?'<button data-beta="scan-resume" type="button">▶ Продолжить полную проверку</button>':''}`;
+    const progressBar=f.total?`<div class="ena-scan-progress" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"><span style="width:${progress}%"></span></div><p>Полный проход: ${f.cursor||0} / ${f.total||0} сообщений · ${progress}% · блоков ${f.blocks||0} · новых предложений ${f.added||0} · ${encode(f.status||'')}</p>`:'';
+    return `<div class="ena-content ena-scroll ena-beta-space"><div class="ena-beta-banner"><b>Источник ИИ: активное подключение SillyTavern</b><p>Вызов через generateRaw без изменения чата и без самостоятельного переключения API-профиля.</p><p>Обработано блоков: ${b.syncRuns||0}; сообщений в чате: ${c.length}; текущая позиция: ${b.syncCursor===null?'ещё не задана':b.syncCursor}.</p></div>
+      <div class="ena-beta-controls"><button data-beta="scan-last" ${extracting?'disabled':''}>Последние ${Number(s.interval||50)} сообщений</button><button data-beta="scan-new" ${extracting?'disabled':''}>Новые сообщения</button>${work}<button data-beta="export">Экспорт JSON</button><label class="ena-beta-file">Импорт JSON <input data-beta-input="import" type="file" accept="application/json,.json"></label></div>
+      <div class="ena-beta-notice">Полная проверка выполняется порциями по ${Number(s.interval)||50} сообщений через активную модель. Каждая порция — отдельный платный запрос; можно остановить и возобновить. Начало полной проверки не удаляет существующие предложения. Перед импортом рекомендуется экспортировать копию.</div>${progressBar}
+      <h3>Предложения (${pending.length})</h3>${cards||'<p>Нет предложений. ИИ не должен придумывать события, которых не было.</p>'}<h3>Основания после откатов (${invalid.length})</h3>${invalid.map(r=>`<p class="ena-beta-warning">⚠ ${encode(r.title)} — источник удалён или изменён, запись скрыта.</p>`).join('')||'<p>Осиротевших записей нет.</p>'}<h3>Журнал</h3><div class="ena-beta-log">${b.history.slice(0,40).map(x=>`<div><small>${encode(x.time?.slice(0,16).replace('T',' ')||'')}</small> ${encode(x.summary)}</div>`).join('')}</div></div>`;
   }
   function mutateRecord(scope,fields,previous=null,sources=[]){const b=state();if(previous){Object.assign(previous,fields);previous.sources=sources.length?sources:previous.sources||[];queueHistory('Изменено вручную: '+previous.title);}else{b.records.push({id:key(),scope,created:dateTime(),manual:true,...fields,sources});queueHistory('Добавлено вручную: '+fields.title);}saveMeta();}
   function action(type,el){if(!el.closest('#ena-desktop-root'))return false;
-    if(type==='scan-last'||type==='scan-new'){void scan(type==='scan-last');return true;}
+    if(type==='scan-last'||type==='scan-new'){if(fullScanRunning){toast('Сначала останови полную проверку');return true;}void scan(type==='scan-last');return true;}
+    if(type==='scan-all'){void scanWholeChat(false);return true;}
+    if(type==='scan-resume'){void scanWholeChat(true);return true;}
+    if(type==='scan-stop'){fullScanStop=true;toast('Остановка после текущего запроса');return true;}
     if(type==='go-sync'){ui.tab.gm='sync';fillWindow('gm');return true;}
     if(type==='new'){const app=el.closest('.ena-window')?.dataset.app;let scope=activeScope(app);if(!TABLES[scope])return true;editor={app,scope,id:null};fillWindow(app);return true;}
     if(type==='edit'){const r=state().records.find(x=>x.id===el.dataset.id);if(!r)return true;editor={app:r.scope.split(':')[0],scope:r.scope,id:r.id};fillWindow(editor.app);return true;}
@@ -137,10 +149,23 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     return false;
   }
   function input(el){if(el.dataset.betaInput==='search'){filter=el.value;const app=el.closest('.ena-window')?.dataset.app;const content=el.closest('.ena-window')?.querySelector('.ena-beta-records,.ena-beta-empty');if(app&&TABLES[activeScope(app)]){const temp=document.createElement('div');temp.innerHTML=renderRows(activeScope(app),app);const container=el.closest('.ena-window')?.querySelector('.ena-content');if(container)container.innerHTML=temp.innerHTML;}return true;}return false;}
-  async function importBackup(file){if(file.size>7_000_000){toast('Файл слишком большой');return;}if(!confirm('Заменить все данные ЭТОГО чата содержимым резервной копии?'))return;
-    try{const json=JSON.parse(await file.text());if(json?.chatData?.archive&&json?.chatData?.beta?.records&&json.chatData.beta.records.length<10000){const m=meta(),data=json.chatData;
-        for(const prop of ['archive','salon','directory','gm','notes','gameDate','gameTime','beta'])if(data[prop]!==undefined)m[prop]=data[prop];saveMeta();editor=null;toast('Резервная копия импортирована');for(const a of ['archive','salon','directory','gm','notes'])fillWindow(a);
-      }else throw Error('Неподходящий формат Ena Desktop');}catch(e){toast('Ошибка импорта: '+e.message);}}
+  async function importBackup(file){
+    if(file.size>20_000_000){toast('Резервная копия больше 20 МБ');return;}
+    let json;
+    try{json=JSON.parse(await file.text());}catch{toast('Ошибка: файл не является корректным JSON');return;}
+    const data=json?.chatData;
+    if(!data||!data.archive||!data.beta||!Array.isArray(data.beta.records)||data.beta.records.length>=10000){toast('Неподходящая резервная копия Ena Desktop');return;}
+    if(!confirm('Импорт ЗАМЕНИТ данные ноутбука ТЕКУЩЕГО чата. Сначала сохрани экспорт текущих данных. Продолжить?'))return;
+    const bag=activeChatKey();
+    try{
+      if(bag!==activeChatKey()){toast('Чат изменился: импорт отменён');return;}
+      const m=meta();
+      for(const prop of ['archive','salon','directory','gm','notes','gameDate','gameTime','beta'])if(data[prop]!==undefined)m[prop]=structuredClone(data[prop]);
+      saveMeta();editor=null;markInvalid();
+      toast('Импорт завершён. Проверены источники сообщений.');
+      for(const a of ['archive','salon','directory','gm','notes','mail','sms'])fillWindow(a);
+    }catch(e){console.error('[EnaDesktop] import failed',e);toast('Ошибка импорта: '+e.message);}
+  }
   function markInvalid(){const b=state();const invalid=b.records.filter(r=>r.sources?.length&&!valid(r));const newly=invalid.filter(r=>!r.notifiedInvalid);
     newly.forEach(r=>{r.notifiedInvalid=true;queueHistory('Откат: основание «'+r.title+'» отсутствует',false);});
     b.records.filter(r=>r.notifiedInvalid&&valid(r)).forEach(r=>{r.notifiedInvalid=false;queueHistory('Источник восстановлен: '+r.title,false);});
@@ -153,39 +178,78 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
   }
   function archiveValid(record){return validateEvidence(record?.autoSources||[],messages());}
   function activeChatKey(){return ctx()?.chatMetadata || null;}
-  async function scan(recent){if(extracting){toast('Проверка уже идёт');return;}
-    const c=ctx();if(typeof c?.generateRaw!=='function'){toast('Активная модель SillyTavern недоступна');return;}
-    const bag=activeChatKey(),b=state(),chat=messages(),interval=Math.max(5,Math.min(100,Number(settings().enaSync.interval)||50));
-    if(!chat.length){toast('В чате нет сообщений');return;}
-    const start=recent?Math.max(0,chat.length-interval):Math.max(0,Math.min(b.syncCursor??chat.length,chat.length));
-    const portion=chat.slice(start,start+interval).map((x,i)=>({index:start+i,key:messageKey(x),speaker:x.is_user?'Ена/пользователь':'Рассказчик',text:(()=>{const m=String(x.mes||'');return m.length>5000?m.slice(0,2600)+'\n[... фрагмент длинного сообщения пропущен ...]\n'+m.slice(-2300):m;})()})).filter(x=>x.key&&x.text.trim());
-    if(!portion.length){toast('Новых сообщений для проверки нет');return;}
-    extracting=true;toast('Проверяю '+portion.length+' сообщений через текущее API');if(ui.windows.has('gm'))fillWindow('gm');
+  // A single sequential chunk. Returns null on failure / chat switch, and never
+  // silently skips a failed chunk. Full-chat mode stores its own resumable cursor.
+  async function scanChunk(start, limit, {updateCursor=true}={}){
+    if(extracting)return null;
+    const c=ctx();if(typeof c?.generateRaw!=='function'){toast('Активная модель SillyTavern недоступна');return null;}
+    const bag=activeChatKey(),b=state(),chat=messages(),end=Math.min(chat.length,start+limit);
+    const portion=chat.slice(start,end).map((x,i)=>({index:start+i,key:messageKey(x),speaker:x.is_user?'Ена/пользователь':'Рассказчик',text:(()=>{const m=String(x.mes||'');return m.length>5000?m.slice(0,2600)+'\n[... фрагмент длинного сообщения пропущен ...]\n'+m.slice(-2300):m;})()})).filter(x=>x.key&&x.text.trim());
+    if(end<=start)return {next:end,added:0};
+    if(!portion.length){if(updateCursor){b.syncCursor=Math.max(b.syncCursor??0,end);saveMeta();}return {next:end,added:0};}
+    extracting=true;toast('Проверяю сообщения '+(start+1)+'–'+end+' через текущее API');if(ui.windows.has('gm'))fillWindow('gm');
     const system=`Ты строгий экстрактор СОБЫТИЙ для ролевой игры JoJo (Неаполь 2001), а не рассказчик. Верни ТОЛЬКО JSON: {"changes":[{"scope":"gm:inventory","title":"...","detail":"...","message_ids":["m0"],"quote":"точная короткая цитата из указанного сообщения","confidence":"high","progress":"planned","owned":false}]} .
 Доступные scope: ${SCOPE_KEYS.join(', ')}. События ТОЛЬКО прямо подтверждённые текстом: явно приобретённый предмет, просмотренный Еной фильм, полученное письмо или SMS, изменение баланса, конкретная травма, выполненное задание, открытое место или знание NPC. Простое УПОМИНАНИЕ произведения не означает просмотр. Для личных archive:films progress=seen ТОЛЬКО при реально подтверждённом просмотре; для books=read, для music=listened, иначе planned. Поле owned=true ТОЛЬКО если Ена купила копию ДЛЯ СЕБЯ. Покупка лицензии для видеосалона НЕ добавляет фильм в личный архив. Личные мысли Ены не придумывать. Никогда не переносить в личные записи Ены сведения, известные только GM. Не создавать эфирных богов, меметическое заражение, опасность просмотра VHS без подтверждения. Для каждого изменения используй 1-2 ID реально подтверждающих сообщений и цитату ДОСЛОВНО из одного из них. Для поиска МЕНЬШЕ значит ЛУЧШЕ. Если фактов нет, changes:[] . Никакого текста вне JSON.`;
     const payload=portion.map((x,i)=>({id:'m'+i,index:x.index,key:x.key,speaker:x.speaker,text:x.text}));
-    try{const result=await c.generateRaw({systemPrompt:system,prompt:'Извлеки только факты из сообщений:\n'+JSON.stringify(payload)});
-      if(bag!==activeChatKey()){toast('Чат изменился: результаты отброшены');return;}
+    try{
+      const result=await c.generateRaw({systemPrompt:system,prompt:'Извлеки только факты из сообщений:\n'+JSON.stringify(payload)});
+      if(bag!==activeChatKey()){toast('Чат изменился: проверка остановлена');return null;}
       const changes=parseExtraction(result);const seenKeys=new Set([...b.proposals.map(x=>x.signature)]);let added=0;
       for(const change of changes){if(!SCOPE_KEYS.includes(change.scope))continue;const ids=Array.isArray(change.message_ids)?change.message_ids:[];
         const sources=ids.map(id=>payload[Number(String(id).replace(/^m/,''))]).filter(Boolean);
         if(!sources.length||sources.length>3)continue;
-        const quote=String(change.quote||'').trim();
-        if(quote&&!sources.some(x=>x.text.includes(quote)))continue;
+        const quote=String(change.quote||'').trim();if(quote&&!sources.some(x=>x.text.includes(quote)))continue;
         const title=String(change.title||'').trim().slice(0,160),detail=String(change.detail||'').trim().slice(0,1600);if(!title)continue;
         const signature=digest([change.scope,title,detail,...sources.map(x=>x.key)].join('|'));if(seenKeys.has(signature))continue;
         const evidence=sources.map(x=>({index:x.index,key:x.key}));
-        b.proposals.push({id:key(),signature,status:'pending',scope:change.scope,title,detail,extra:String(change.extra||'').slice(0,200),date:String(change.date||'').slice(0,70),year:String(change.year||'').slice(0,40),progress:String(change.progress||'').slice(0,40),owned:change.owned===true,quote,confidence:String(change.confidence||'').slice(0,30),sources:evidence,created:dateTime()});
-        seenKeys.add(signature);added++;
+        b.proposals.push({id:key(),signature,status:'pending',scope:change.scope,title,detail,extra:String(change.extra||'').slice(0,200),date:String(change.date||'').slice(0,70),year:String(change.year||'').slice(0,40),progress:String(change.progress||'').slice(0,40),owned:change.owned===true,quote,confidence:String(change.confidence||'').slice(0,30),sources:evidence,created:dateTime()});seenKeys.add(signature);added++;
       }
-      b.syncCursor=Math.max(b.syncCursor??0,start+portion.length);b.syncRuns=(b.syncRuns||0)+1;
-      queueHistory(`Проверено ${portion.length} сообщений, предложено ${added} новых изменений`);toast('Предложений на проверку: '+added);
-    }catch(e){console.error('[EnaDesktop] AI sync error',e);toast('Ошибка ИИ: '+(e?.message||'проверяй консоль'));}
+      if(updateCursor)b.syncCursor=Math.max(b.syncCursor??0,end);
+      b.syncRuns=(b.syncRuns||0)+1;
+      queueHistory(`Проверены сообщения ${start}–${end-1}, предложено ${added} изменений`);
+      return {next:end,added};
+    }catch(e){console.error('[EnaDesktop] AI sync error',e);toast('Ошибка ИИ: '+(e?.message||'проверяй консоль'));return null;}
     finally{extracting=false;if(ui.windows.has('gm'))fillWindow('gm');}
+  }
+  async function scan(recent){if(fullScanRunning||extracting){toast('Проверка уже идёт');return;}
+    const chat=messages(),interval=Math.max(5,Math.min(100,Number(settings().enaSync.interval)||50));
+    if(!chat.length){toast('В чате нет сообщений');return;}
+    const start=recent?Math.max(0,chat.length-interval):Math.max(0,Math.min(state().syncCursor??chat.length,chat.length));
+    if(start>=chat.length){toast('Новых сообщений для проверки нет');return;}
+    await scanChunk(start,interval);
+  }
+  async function scanWholeChat(resume){
+    if(fullScanRunning||extracting){toast('Проверка уже идёт');return;}
+    const chat=messages(),b=state(),interval=Math.max(5,Math.min(100,Number(settings().enaSync.interval)||50));
+    if(!chat.length){toast('Чат пуст');return;}
+    const saved=b.fullScan||{},canResume=resume&&saved.cursor>0&&saved.cursor<saved.total;
+    const start=canResume?saved.cursor:0,total=canResume?Math.min(saved.total,chat.length):chat.length;
+    if(!canResume){const chunks=Math.ceil(total/interval);if(!confirm(`Проверить ${total} сообщений порциями по ${interval}? Это до ${chunks} запросов к активной модели и может расходовать платные токены. Результаты будут предложениями, не автоматическими фактами.`))return;}
+    if(!canResume)b.fullScan={cursor:0,total,status:'running',added:0,blocks:0};
+    else b.fullScan.status='running';
+    fullScanStop=false;fullScanRunning=true;const bag=activeChatKey();saveMeta();
+    try{
+      for(let i=start;i<total;){
+        if(fullScanStop||bag!==activeChatKey()){b.fullScan.status='paused';break;}
+        const result=await scanChunk(i,Math.min(interval,total-i),{updateCursor:false});
+        if(!result){b.fullScan.status='paused';break;}
+        i=result.next;
+        b.fullScan.cursor=i;b.fullScan.added+=result.added;b.fullScan.blocks++;
+        b.fullScan.status=i>=total?'complete':'running';
+        saveMeta();if(ui.windows.has('gm'))fillWindow('gm');
+        // Yield to the browser so the stop button remains responsive between API calls.
+        await new Promise(resolve=>setTimeout(resolve,70));
+      }
+      if(bag===activeChatKey()&&b.fullScan.cursor>=total){
+        b.fullScan.status='complete';b.syncCursor=Math.max(b.syncCursor??0,total);
+        queueHistory('Полная проверка завершена: '+total+' сообщений, '+b.fullScan.added+' новых предложений');
+        toast('Полная проверка завершена! Предложений: '+b.fullScan.added);
+      }else if(bag===activeChatKey()){queueHistory('Полная проверка приостановлена на сообщении '+b.fullScan.cursor);toast('Полная проверка приостановлена');}
+    }finally{fullScanRunning=false;fullScanStop=false;if(ui.windows.has('gm'))fillWindow('gm');}
   }
   function updateEvents(){clearTimeout(pendingTimer);pendingTimer=setTimeout(()=>{const bag=activeChatKey();if(!bag)return;markInvalid();const b=state(),count=messages().length;
       if(b.syncCursor===null){b.syncCursor=count;saveMeta();}
-      else if(settings().enaSync.automatic&&!extracting&&count-b.syncCursor>=Number(settings().enaSync.interval||50)){void scan(false);}
+      else if(settings().enaSync.automatic&&!extracting&&!fullScanRunning&&count-b.syncCursor>=Number(settings().enaSync.interval||50)){void scan(false);}
     },900);
   }
   function initialize(){const c=ctx();state();if(!c?.eventSource?.on)return;

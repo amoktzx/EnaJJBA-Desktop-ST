@@ -9,3 +9,9 @@
 - Ручная и опциональная автоматическая проверка последних N сообщений через активное подключение SillyTavern.
 - Подтверждение извлечённых моделью предложений до применения.
 - Откат видимости подтверждённых фактов, когда доказательство удалено/отредактировано/поменяло свайп.
+
+
+### 1.0.0-beta.2
+- Prioritized titlebar window controls click handlers and focus handling.
+- Export/import in GM sync view, validated JSON import and overwrite confirmation.
+- Whole-chat sequential scanning with persisted progress, stop/resume, token cost confirmation.
