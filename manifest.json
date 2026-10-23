@@ -1,0 +1,11 @@
+{
+  "display_name": "Ena Desktop — ноутбук Ены (2001)",
+  "loading_order": 14,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "style.css",
+  "author": "Ena Desktop project",
+  "version": "0.1.0",
+  "auto_update": false
+}

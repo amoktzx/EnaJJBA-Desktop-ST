@@ -1,0 +1,143 @@
+/* Ena Desktop 2001 — scoped, Windows 2000-inspired shell. */
+#ena-desktop-root, #ena-desktop-fab {font-family:Tahoma,Verdana,Arial,sans-serif!important;font-weight:400;font-size:13px;color:#171717;}
+#ena-desktop-root *,#ena-desktop-root *::before,#ena-desktop-root *::after,#ena-desktop-fab *{box-sizing:border-box;}
+#ena-desktop-root[hidden],#ena-desktop-fab[hidden]{display:none!important;}
+#ena-desktop-root{--ena-light:#e1ded6;--ena-face:#d4d0c8;--ena-border:#77716b;--ena-navy:#142d66;--ena-icon-size:56px;position:fixed;inset:0;z-index:2147481000;isolation:isolate;line-height:1.3;}
+#ena-desktop-root button,#ena-desktop-root input,#ena-desktop-root select,#ena-desktop-root textarea{font-family:Tahoma,Verdana,Arial,sans-serif;font-size:13px;}
+#ena-desktop-root button{cursor:pointer;color:inherit;}
+#ena-desktop-root .ena-screen{position:absolute;inset:0;overflow:hidden;background-color:#3d6998;background-size:cover;background-position:center center;}
+#ena-desktop-root .ena-screen.ena-classic{background-color:#3a6a9d;}
+#ena-desktop-root .ena-desktop-icons{position:absolute;top:10px;left:12px;display:grid;grid-auto-flow:column;grid-template-rows:repeat(4,115px);grid-auto-columns:114px;gap:2px 13px;z-index:1;align-items:start;}
+#ena-desktop-root .ena-desktop-icon{border:1px solid transparent;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:7px 4px 2px;width:108px;height:107px;color:#fff!important;text-shadow:1px 1px #16233c,-1px 0 #16233c,0 1px #16233c;line-height:1.22;}
+#ena-desktop-root .ena-desktop-icon img{width:var(--ena-icon-size);height:var(--ena-icon-size);object-fit:contain;filter:drop-shadow(1px 2px 1px #0b1a2baa);image-rendering:auto;}
+#ena-desktop-root .ena-desktop-icon span{margin-top:5px;font-size:13.5px;display:block;text-align:center;max-width:105px;overflow-wrap:break-word;}
+#ena-desktop-root .ena-desktop-icon:hover{background:#5273ae55;border:1px dotted #cad8f9;}
+#ena-desktop-root .ena-desktop-icon:focus-visible{outline:1px dotted #fff;background:#1a3a7e77;}
+#ena-desktop-root .ena-taskbar{position:absolute;bottom:0;left:0;right:0;height:44px;background:linear-gradient(#e6e4dd 0%,#cfcac0 100%);border-top:2px solid #fff;box-shadow:0 -2px #62636c;display:flex;align-items:center;gap:5px;padding:2px 5px;z-index:150;}
+#ena-desktop-root .ena-start-button{height:35px;min-width:100px;padding:2px 12px 2px 6px;background:linear-gradient(#fcfaf4,#d0c9bc);border:2px solid;border-color:#fff #666 #666 #fff;box-shadow:1px 1px #363636;display:flex;align-items:center;gap:7px;font-size:16px;font-weight:bold;}
+#ena-desktop-root .ena-start-logo{font-size:22px;font-weight:bold;color:#246a8b;text-shadow:1px 1px #f5c06b;}
+#ena-desktop-root .ena-start-button:active{border-color:#777 #fff #fff #777;}
+#ena-desktop-root .ena-task-items{display:flex;align-items:center;gap:3px;min-width:0;overflow:hidden;flex:1;height:100%;}
+#ena-desktop-root .ena-task-button{display:flex;align-items:center;gap:5px;min-width:68px;max-width:192px;width:170px;height:32px;overflow:hidden;padding:1px 7px;text-align:left;white-space:nowrap;text-overflow:ellipsis;border:2px solid;border-color:#fff #6d6d70 #6d6d70 #fff;background:#d8d5cb;}
+#ena-desktop-root .ena-task-button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#ena-desktop-root .ena-task-active{background:#c6c1b8;border-color:#676767 #fff #fff #676767;}
+#ena-desktop-root .ena-tray{height:37px;min-width:115px;display:flex;align-items:center;justify-content:center;gap:6px;padding:1px 8px 1px 5px;background:#d9d6ce;border:1px solid;border-color:#777 #fff #fff #777;}
+#ena-desktop-root .ena-tray span[aria-hidden]{color:#546a7d;font-size:13px;}
+#ena-desktop-root .ena-tray-time{font-weight:bold;letter-spacing:.1px;white-space:nowrap;}
+#ena-desktop-root .ena-tray-date{font-size:11px;color:#404147;white-space:nowrap;}
+#ena-desktop-root .ena-window{position:absolute;display:flex;flex-direction:column;background:#d4d0c8;min-width:295px;min-height:230px;resize:both;border:3px solid;border-color:#f2f2ec #514d49 #514d49 #f2f2ec;box-shadow:1px 2px 0 #101827,5px 7px 12px #080f20aa;overflow:hidden;z-index:50;}
+#ena-desktop-root .ena-window.ena-focused{box-shadow:2px 4px 0 #17243f,7px 13px 16px #030d1e99;}
+#ena-desktop-root .ena-window.ena-minimized{display:none!important;}
+#ena-desktop-root .ena-window.ena-maximized{top:0!important;left:0!important;width:100%!important;height:calc(100% - 44px)!important;}
+#ena-desktop-root .ena-titlebar{flex:0 0 31px;background:linear-gradient(90deg,#152966,#3262a1);display:flex;align-items:center;justify-content:space-between;color:#fff;gap:6px;padding:3px 4px 3px 7px;touch-action:none;cursor:move;user-select:none;}
+#ena-desktop-root .ena-window:not(.ena-focused) .ena-titlebar{background:linear-gradient(90deg,#66748e,#a0adc2);}
+#ena-desktop-root .ena-title{display:flex;align-items:center;gap:6px;min-width:0;}
+#ena-desktop-root .ena-title strong{white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:13px;color:#fff;}
+#ena-desktop-root .ena-window-buttons{display:flex;align-items:center;gap:2px;}
+#ena-desktop-root .ena-window-buttons button{width:23px;height:21px;line-height:16px;text-align:center;border:2px solid;border-color:#fff #585858 #585858 #fff;background:#d9d5d0;padding:0;font-size:15px;font-weight:bold;}
+#ena-desktop-root .ena-window-buttons button:last-child{background:#d3bac0;}
+#ena-desktop-root .ena-window-body{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
+#ena-desktop-root .ena-toolbar{flex-shrink:0;height:31px;display:flex;align-items:center;justify-content:space-between;padding:3px 11px;border-bottom:1px solid #a9a59d;background:linear-gradient(#ebe9e2,#d4d0c8);}
+#ena-desktop-root .ena-toolbar-name{font-weight:bold;font-size:13px;}
+#ena-desktop-root .ena-toolbar-extra{color:#636363;font-size:11px;}
+#ena-desktop-root .ena-tabs{display:flex;gap:2px;align-items:flex-end;overflow-x:auto;flex-shrink:0;min-height:36px;padding:5px 8px 0;background:#d4d0c8;}
+#ena-desktop-root .ena-tab{border:2px solid;border-color:#fff #656460 #656460 #fff;background:#c4c0b9;padding:6px 11px 5px;white-space:nowrap;min-height:30px;}
+#ena-desktop-root .ena-tab-on{background:#e6e2d9;border-bottom-color:#e6e2d9;font-weight:bold;}
+#ena-desktop-root .ena-subtoolbar{flex-shrink:0;min-height:40px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #fff;border-bottom:1px solid #8c8980;padding:5px 11px;color:#4e4c4b;font-size:12px;}
+#ena-desktop-root .ena-subtoolbar label{display:flex;align-items:center;gap:7px;}
+#ena-desktop-root .ena-subtoolbar button,#ena-desktop-root .ena-control,#ena-desktop-root .ena-add-form button,#ena-desktop-root .ena-settings-content button{padding:4px 10px;border:2px solid;border-color:#fff #6d6b69 #6d6b69 #fff;background:#dedbd3;white-space:nowrap;}
+#ena-desktop-root .ena-subtoolbar select,#ena-desktop-root .ena-add-form input,#ena-desktop-root .ena-add-form select,#ena-desktop-root .ena-settings-content select,#ena-desktop-root .ena-settings-content input:not([type=checkbox]):not([type=range]):not([type=file]){background:#fff;color:#222;border:2px solid;border-color:#777 #f5f5f5 #f5f5f5 #777;padding:4px 6px;min-width:0;}
+#ena-desktop-root .ena-content{flex:1;min-height:0;background:#e8e5dd;border:2px solid;border-color:#6c6964 #fff #fff #6c6964;margin:6px;padding:13px;}
+#ena-desktop-root .ena-scroll{overflow-y:auto;scrollbar-color:#aaa89d #e2dfd7;}
+#ena-desktop-root .ena-media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;}
+#ena-desktop-root .ena-media-card{border:1px solid #b5b0a8;background:#eeeae2;display:flex;flex-direction:column;padding:7px;gap:6px;min-width:0;min-height:180px;}
+#ena-desktop-root .ena-media-art{height:97px;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#464567,#25283d);border:1px solid #4e4c60;}
+#ena-desktop-root .ena-media-art img{filter:drop-shadow(2px 2px 1px #101320);}
+#ena-desktop-root .ena-media-data{display:flex;flex-direction:column;gap:5px;min-width:0;}
+#ena-desktop-root .ena-media-data b{font-size:12px;overflow-wrap:anywhere;}
+#ena-desktop-root .ena-media-data small{color:#5d5b5c;}
+#ena-desktop-root .ena-media-badges{display:flex;gap:3px;flex-wrap:wrap;}
+#ena-desktop-root .ena-tag{font-size:10px;border:1px solid #9a90a5;background:#ded7e0;padding:2px 4px;}
+#ena-desktop-root .ena-card-buttons{display:flex;gap:4px;margin-top:auto;}
+#ena-desktop-root .ena-card-buttons button{padding:2px 5px;border:1px solid #888;background:#ddd8d3;font-size:11px;}
+#ena-desktop-root .ena-statusline{flex-shrink:0;padding:4px 9px;border-top:1px solid #fff;font-size:11px;color:#585653;background:#d4d0c8;}
+#ena-desktop-root .ena-empty{min-height:170px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#62616a;gap:7px;padding:16px;}
+#ena-desktop-root .ena-empty b{font-size:15px;color:#3b3c46;}
+#ena-desktop-root .ena-empty p{max-width:440px;font-size:12px;margin:0;}
+#ena-desktop-root .ena-hint{margin:0 auto;max-width:490px;color:#66646d;font-size:12px;text-align:center;padding:10px;}
+#ena-desktop-root .ena-add-form{padding:7px 10px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:#efebe5;border-bottom:1px solid #a69f98;}
+#ena-desktop-root .ena-add-form input[name=title]{flex:2;min-width:135px;}
+#ena-desktop-root .ena-add-form input[name=year]{width:68px;}
+#ena-desktop-root .ena-add-form label{white-space:nowrap;font-size:11px;}
+#ena-desktop-root .ena-add-form input[name=detail]{min-width:170px;flex:2;}
+#ena-desktop-root .ena-salon-home,#ena-desktop-root .ena-gm-home{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;}
+#ena-desktop-root .ena-pane{border:1px solid #aaa49c;background:#e4e0d8;padding:17px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+#ena-desktop-root .ena-pane strong,#ena-desktop-root .ena-pane b{font-size:15px;}
+#ena-desktop-root .ena-pane p{margin:5px 0;color:#55504f;font-size:12px;}
+#ena-desktop-root .ena-row-list{border:1px solid #b4b0a7;background:#f0ede6;}
+#ena-desktop-root .ena-data-row{display:grid;grid-template-columns:minmax(100px,1fr) minmax(110px,2fr) 31px;gap:7px;align-items:center;padding:9px 8px;border-bottom:1px solid #c8c5be;}
+#ena-desktop-root .ena-data-row:nth-child(even){background:#e5e3dd;}
+#ena-desktop-root .ena-data-row span{font-weight:bold;overflow-wrap:anywhere;}
+#ena-desktop-root .ena-data-row small{font-size:11px;color:#555;overflow-wrap:anywhere;}
+#ena-desktop-root .ena-data-row button{border:1px solid #9b9490;background:#dfdad3;font-size:16px;}
+#ena-desktop-root .ena-notes-wrap{display:flex;flex-direction:column;flex:1;min-height:0;padding:13px;gap:8px;background:#dedad2;}
+#ena-desktop-root .ena-notes-wrap p{margin:0;color:#525056;font-size:12px;}
+#ena-desktop-root .ena-notes{width:100%;resize:none;min-height:80px;flex:1;background:#fdf9e9;color:#343333;border:2px solid;border-color:#6b675f #fff #fff #6b675f;padding:14px;font:14px/1.6 'Courier New',monospace;}
+#ena-desktop-root .ena-notes-wrap small{color:#5b5957;}
+#ena-desktop-root .ena-settings-content{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:13px;overflow:auto;}
+#ena-desktop-root .ena-settings-block{display:flex;flex-direction:column;gap:12px;border:1px solid #b5b0a6;background:#eeeae2;padding:14px;min-width:0;}
+#ena-desktop-root .ena-settings-block b{font-size:14px;padding-bottom:5px;border-bottom:1px solid #bbb;}
+#ena-desktop-root .ena-settings-block label{display:flex;flex-direction:column;gap:5px;line-height:1.45;}
+#ena-desktop-root .ena-settings-block label:has(input[type=checkbox]){display:block;}
+#ena-desktop-root .ena-settings-block small{font-size:11px;color:#6b6567;line-height:1.4;}
+#ena-desktop-root .ena-settings-block input[type=file]{width:100%;font-size:11px;}
+#ena-desktop-root .ena-start-menu{position:absolute;z-index:170;bottom:43px;left:5px;width:303px;min-height:255px;border:3px solid;border-color:#fff #424345 #424345 #fff;background:#d4d0c8;display:flex;box-shadow:3px 4px 0 #15233c99;}
+#ena-desktop-root .ena-start-stripe{writing-mode:vertical-rl;transform:rotate(180deg);background:linear-gradient(#152668,#3562a2);color:#fff;padding:9px 7px;font-size:20px;font-weight:300;letter-spacing:.2px;}
+#ena-desktop-root .ena-start-main{flex:1;padding:5px;display:flex;flex-direction:column;gap:2px;}
+#ena-desktop-root .ena-start-entry{display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;font-size:13px;}
+#ena-desktop-root .ena-start-entry:hover{background:#1c387b;color:white;}
+#ena-desktop-root .ena-start-rule{border-top:1px solid #98958e;border-bottom:1px solid #fff;margin:8px 0;}
+#ena-desktop-root .ena-start-main>button{border:0;background:transparent;padding:8px;text-align:left;}
+#ena-desktop-root .ena-start-main>button:hover{background:#1c387b;color:#fff;}
+#ena-desktop-root .ena-calendar-popup{position:absolute;bottom:43px;right:4px;width:271px;padding:12px;background:#e7e3db;border:3px solid;border-color:#fff #676363 #676363 #fff;z-index:180;box-shadow:-2px -2px 12px #0005;}
+#ena-desktop-root .ena-cal-heading{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-bottom:8px;}
+#ena-desktop-root .ena-cal-heading button{border:1px solid #777;background:#d7d3ca;padding:2px 6px;}
+#ena-desktop-root .ena-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;}
+#ena-desktop-root .ena-cal-grid strong{text-align:center;padding:5px 0;font-size:11px;color:#3d4060;}
+#ena-desktop-root .ena-cal-grid button{padding:5px 0;border:0;background:transparent;min-height:25px;}
+#ena-desktop-root .ena-cal-grid button:hover{background:#a7b4ce;}
+#ena-desktop-root .ena-cal-grid .ena-cal-selected{background:#233e83;color:#fff;}
+#ena-desktop-root .ena-cal-hint{text-align:center;font-size:10px;margin-top:8px;color:#69645d;}
+#ena-desktop-root .ena-toast{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);z-index:300;background:#eceae1;border:2px solid #334578;box-shadow:0 4px 15px #0005;max-width:90%;padding:9px 14px;color:#20212e;opacity:0;pointer-events:none;transition:opacity .16s;}
+#ena-desktop-root .ena-toast-visible{opacity:1;}
+#ena-desktop-fab{position:fixed!important;right:14px!important;top:36%!important;z-index:50000!important;padding:7px!important;width:56px!important;height:55px!important;background:#d7d0bf!important;border:3px outset #f9f6ec!important;box-shadow:1px 3px 9px #0007!important;display:flex!important;align-items:center;justify-content:center;cursor:pointer;}
+#ena-desktop-fab:focus-visible{outline:3px solid #8cb5ff;}
+@media(max-width:900px){#ena-desktop-root .ena-desktop-icons{grid-auto-columns:100px;gap:2px 3px;}#ena-desktop-root .ena-window{max-width:calc(100vw - 12px)!important;} }
+@media(max-width:699px){
+  #ena-desktop-root .ena-desktop-icons{top:8px;left:5px;right:5px;display:grid;grid-auto-flow:row;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:111px;justify-items:center;gap:2px 1px;}
+  #ena-desktop-root .ena-desktop-icon{width:min(110px,100%);height:105px;}
+  #ena-desktop-root .ena-desktop-icon span{font-size:12.5px;}
+  #ena-desktop-root .ena-window,#ena-desktop-root .ena-window.ena-maximized{left:0!important;top:0!important;width:100%!important;max-width:100%!important;height:calc(100% - 44px)!important;min-width:0!important;resize:none!important;border-width:2px;}
+  #ena-desktop-root .ena-titlebar{touch-action:auto;cursor:default;}
+  #ena-desktop-root .ena-toolbar-extra{display:none;}
+  #ena-desktop-root .ena-tray{min-width:80px;flex-direction:column;gap:0;padding:0 4px;}
+  #ena-desktop-root .ena-tray span[aria-hidden]{display:none;}
+  #ena-desktop-root .ena-tray-time{font-size:13px;}
+  #ena-desktop-root .ena-tray-date{font-size:10px;}
+  #ena-desktop-root .ena-taskbar{gap:3px;padding:2px;}
+  #ena-desktop-root .ena-start-button{min-width:72px;padding:2px 5px;}
+  #ena-desktop-root .ena-start-logo{font-size:16px;}
+  #ena-desktop-root .ena-task-button{width:43px;min-width:43px;padding:1px 9px;justify-content:center;}
+  #ena-desktop-root .ena-task-button span{display:none;}
+  #ena-desktop-root .ena-media-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+  #ena-desktop-root .ena-salon-home,#ena-desktop-root .ena-gm-home{grid-template-columns:1fr;}
+  #ena-desktop-root .ena-settings-content{grid-template-columns:1fr;}
+  #ena-desktop-root .ena-add-form input[name=title]{min-width:50%;}
+  #ena-desktop-root .ena-tabs{padding:2px 3px 0;}
+  #ena-desktop-root .ena-tab{padding:6px 7px;font-size:12px;}
+  #ena-desktop-root .ena-subtoolbar{font-size:11px;padding:5px;}
+  #ena-desktop-root .ena-content{margin:4px;padding:8px;}
+  #ena-desktop-root .ena-start-menu{bottom:42px;width:min(306px,calc(100vw - 15px));}
+  #ena-desktop-root .ena-calendar-popup{right:1px;bottom:43px;}
+  #ena-desktop-fab{width:48px!important;height:49px!important;right:7px!important;}
+}
