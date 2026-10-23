@@ -3,7 +3,7 @@ import { createBeta } from './beta.js';
    No generation, context injection, Memory Books or chat edits in v0.1. */
 const ENA = (() => {
   'use strict';
-  const VERSION = '1.0.0-beta.3';
+  const VERSION = '1.0.0-beta.4';
   const META_KEY = 'ena_desktop_v1';
   const SETTING_KEY = 'ena_desktop_2001';
   const ROOT = new URL('./', import.meta.url);
@@ -184,7 +184,7 @@ const ENA = (() => {
       <div class="ena-editor-foot">${id?`<button type="button" data-action="delete-record" data-scope="archive-${cat}" data-id="${esc(id)}">Удалить запись</button>`:''}<button type="button" data-action="archive-cancel">Отмена</button><button type="submit" class="ena-primary">${id?'Сохранить изменения':'Добавить в Архив'}</button></div>
     </form></div>`;
   }
-  function archiveHTML(){const cat=ui.tab.archive;const rows=meta().archive[cat].filter(r=>beta.archiveValid(r));const name=categories[cat][0];
+  function archiveHTML(){const cat=ui.tab.archive;const rows=meta().archive[cat].filter(r=>!r.deleted&&beta.archiveValid(r));const name=categories[cat][0];
     const term=ui.search.trim().toLocaleLowerCase('ru');
     const filtered=rows.filter(r=>{
       if(term&&!`${r.title||''} ${r.year||''} ${r.detail||''}`.toLocaleLowerCase('ru').includes(term))return false;
@@ -271,7 +271,7 @@ const ENA = (() => {
     if(action==='cycle-progress'){const cat=ui.tab.archive,r=meta().archive[cat].find(x=>x.id===id);if(r){const cycle=cat==='anomalies'?['found','unseen','viewed','studied']:['planned','started','seen'];r.progress=cycle[(cycle.indexOf(r.progress)+1)%cycle.length];saveMeta();fillWindow('archive');}return;}
     if(action==='toggle-revisit'){const r=meta().archive[ui.tab.archive].find(x=>x.id===id);if(r){r.revisit=!r.revisit;saveMeta();fillWindow('archive');}return;}
     if(action==='delete-record'){let [scope,part]=el.dataset.scope.split('-');let arr=scope==='archive'?meta().archive[part]:scope==='salon'?meta().salon[part==='finance'?'transactions':part==='licenses'?'licenses':part==='tasks'?'tasks':'documents']:scope==='directory'?meta().directory[part]:scope==='gm'?meta().gm[part==='body'?'injuries':part==='items'?'items':'quests']:null;if(!arr)return;
-      if(!confirm('Удалить эту запись? Это не меняет сообщения ролевого чата.'))return;const i=arr.findIndex(x=>x.id===id);if(i>=0)arr.splice(i,1);if(scope==='archive')ui.archiveEditor=null;saveMeta();fillWindow(scope==='salon'?'salon':scope==='directory'?'directory':scope==='archive'?'archive':'gm');return;}
+      if(!confirm('Удалить эту запись? Это не меняет сообщения ролевого чата.'))return;const i=arr.findIndex(x=>x.id===id);if(i>=0){beta.deleteLinkedRecord(id);arr.splice(i,1);}if(scope==='archive')ui.archiveEditor=null;saveMeta();fillWindow(scope==='salon'?'salon':scope==='directory'?'directory':scope==='archive'?'archive':'gm');return;}
     if(action==='reset-wallpaper'){localWallpaper=null;try{localStorage.removeItem('ena-desktop-wallpaper');}catch{}persistSettings();updateWallpaper();fillWindow('computer');toast('Обои восстановлены');return;}
     if(action==='cal-prev'||action==='cal-next'){const ref=ui.calendarMonth?new Date(ui.calendarMonth[0],ui.calendarMonth[1],1):new Date((meta().gameDate||'2001-01-01')+'T12:00:00');ref.setMonth(ref.getMonth()+(action==='cal-prev'?-1:1));ui.calendarMonth=[ref.getFullYear(),ref.getMonth()];renderMenus();return;}
     if(action==='day-select'){meta().gameDate=`${el.dataset.year}-${String(Number(el.dataset.month)+1).padStart(2,'0')}-${String(el.dataset.day).padStart(2,'0')}`;saveMeta();ui.calendar=false;updateClock();renderMenus();if(ui.windows.has('computer'))fillWindow('computer');return;}
@@ -302,6 +302,7 @@ const ENA = (() => {
       else Object.assign(newFields,{ownership:fd.has('owned')?'personal':'unknown',revisit:fd.has('revisit'),eventDate:String(fd.get('eventDate')||'').trim().slice(0,70)});
       Object.assign(item,newFields);
       if(!previous)meta().archive[cat].push(item);
+      else beta.syncLinkedArchiveRecord(item);
       ui.archiveEditor=null;saveMeta();fillWindow('archive');toast(previous?'Запись обновлена':'Добавлено в личный Архив');return;
     }
     const item={id:uid(),title:title.slice(0,160),detail:String(fd.get('detail')||'').trim().slice(0,400)};

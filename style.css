@@ -287,3 +287,11 @@
 #ena-desktop-root .ena-beta-proposal-editor label{display:flex;flex-direction:column;align-items:stretch;gap:3px;}
 #ena-desktop-root .ena-beta-proposal-editor select{width:100%;min-width:0;}
 @media(max-width:700px){#ena-desktop-root .ena-api-picker select{width:100%;min-width:0;}#ena-desktop-root .ena-beta-proposal-editor{width:96%;padding:9px;}}
+
+/* Beta 4: all four GM fact states */
+#ena-desktop-root .ena-fact-status-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 11px;border-bottom:1px solid #989790;padding-bottom:8px}
+#ena-desktop-root .ena-fact-status-tabs button{padding:8px 11px;border:2px solid;border-color:#fff #797976 #797976 #fff;background:#d8d6d0;color:#222;font:13px Tahoma,Verdana,sans-serif;cursor:pointer;white-space:nowrap}
+#ena-desktop-root .ena-fact-status-tabs .ena-fact-status-active{background:#203d78;color:#fff;border-color:#0e2451 #fff #fff #0e2451}
+#ena-desktop-root .ena-beta-proposal-actions button[disabled]{opacity:.48}
+#ena-desktop-root .ena-beta-controls button{cursor:pointer;white-space:normal;min-height:31px}
+@media(max-width:650px){#ena-desktop-root .ena-fact-status-tabs button{flex:1 1 43%;font-size:12px}}

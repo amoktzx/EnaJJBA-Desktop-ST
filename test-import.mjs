@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {createBeta} from './beta.js';
+import {exportFullSnapshot} from './factLedger.js';
+import {messageKey} from './betaCore.js';
+const chat=[{mes:'Ена взяла диск.',is_user:true,send_date:'2001-05-01',swipe_id:0}];
+const source={index:0,key:messageKey(chat[0])};
+const meta={archive:{films:[],music:[],books:[],anomalies:[]},salon:{},gm:{},directory:{},notes:'',beta:{schema:2,migrated:true,linksMigrated:true,records:[{id:'r1',proposalId:'p1',scope:'gm:inventory',title:'Старый текст',detail:'Старое описание',sources:[source],status:'active'}],proposals:[{id:'p1',linkedRecordId:'r1',scope:'gm:inventory',title:'Исправлено GPT',detail:'Новая формулировка',status:'approved',sources:[source],factType:'objective',quote:'Ена взяла диск.'},{id:'p2',scope:'gm:knowledge',title:'Отклонённый',detail:'Не канон',status:'rejected',sources:[source],factType:'npc_suspicion',quote:'Ена взяла диск.'},{id:'p3',scope:'gm:inventory',title:'Удалённый',detail:'Не блокирует',status:'deleted',sources:[source],factType:'objective',quote:'Ена взяла диск.'}],history:[{id:'h',time:'2026-10-23T00:00:00Z',summary:'Тест'}],syncCursor:1}};
+const snapshot=exportFullSnapshot(meta,chat.map(messageKey));
+// Edit accepted proposal and delete it: materialized record must not survive import.
+snapshot.data.beta.proposals[0].status='deleted';snapshot.data.beta.proposals[0].detail='Отклонено при ручной правке';
+const current={archive:{films:[],music:[],books:[],anomalies:[]},salon:{},gm:{},directory:{},notes:''};
+const c={chat,chatMetadata:{},saveMetadata:()=>Promise.resolve(),extensionSettings:{}};
+globalThis.confirm=()=>true;globalThis.document={body:{append(){}},createElement(){return {click(){},remove(){}}}};
+const b=createBeta({meta:()=>current,ctx:()=>c,settings:()=>({enaSync:{automatic:false,interval:50,profileId:'active'}}),persistSettings:()=>{},saveMeta:()=>{},toast:()=>{},fillWindow:()=>{},ui:{windows:new Map(),tab:{gm:'sync'}},oldComputer:()=>'',oldNotes:()=>''});
+b.change({dataset:{betaInput:'import'},files:[{size:JSON.stringify(snapshot).length,text:async()=>JSON.stringify(snapshot)}]});
+await new Promise(r=>setTimeout(r,30));
+assert.equal(current.beta.proposals.length,3,'all statuses import');
+assert.equal(current.beta.proposals[0].status,'deleted');
+assert.equal(current.beta.proposals[1].status,'rejected');
+assert.equal(current.beta.records[0].deleted,true,'deleted imported proposal revokes record');
+assert.equal(current.beta.history.length>=1,true,'history imported');
+console.log('Full import of edited GPT JSON: PASSED');

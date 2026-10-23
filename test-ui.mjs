@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {createBeta} from './beta.js';
+const m={archive:{films:[],music:[],books:[],anomalies:[]},salon:{},gm:{},directory:{},notes:'',beta:{schema:2,migrated:true,linksMigrated:true,records:[],history:[],proposals:['pending','approved','rejected','deleted'].map((status,i)=>({id:'p'+i,status,title:'Факт '+i,detail:'Детали',scope:'gm:inventory',sources:[],factType:'objective'}))}};
+const ui={tab:{gm:'sync'},windows:new Map()};
+const b=createBeta({meta:()=>m,ctx:()=>({chat:[],chatMetadata:{}}),settings:()=>({enaSync:{automatic:false,interval:50,profileId:'active'}}),persistSettings:()=>{},saveMeta:()=>{},toast:()=>{},fillWindow:()=>{},ui,oldComputer:()=>'',oldNotes:()=>''});
+const html=b.view('gm');
+for(const label of ['На рассмотрении (1)','Принятые (1)','Отклонённые (1)','Удалённые (1)','Полный экспорт JSON','Импорт JSON'])assert.ok(html.includes(label),label);
+b.action('fact-tab',{closest:()=>({}),dataset:{value:'deleted'}});
+assert.ok(b.view('gm').includes('Восстановить на рассмотрение'));
+b.action('fact-tab',{closest:()=>({}),dataset:{value:'approved'}});
+assert.ok(b.view('gm').includes('Вернуть на рассмотрение'));
+console.log('4 status tabs and import/export controls: PASSED');
