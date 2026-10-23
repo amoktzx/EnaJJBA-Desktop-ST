@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {digest,messageKey,validateEvidence,applyProjection,safeMoney,parseExtraction} from './betaCore.js';
+const source=[{send_date:'2026-01-01',is_user:true,mes:'Ена купила кассету для себя',swipe_id:0}];
+const same=[{...source[0]}];
+const record={id:'x',sources:[{index:0,key:messageKey(source[0])}],status:'approved'};
+assert.equal(validateEvidence(record.sources,same),true);
+assert.equal(applyProjection([record],same).length,1);
+assert.equal(applyProjection([record],[]).length,0,'deleted source must revoke');
+assert.equal(applyProjection([record],[{...source[0],mes:'Ена не купила кассету'}]).length,0,'edited source must revoke');
+assert.equal(applyProjection([record],[{...source[0],swipe_id:1}]).length,0,'swipe must revoke');
+assert.equal(applyProjection([record],[{send_date:'other',mes:'X',is_user:true},...same]).length,1,'shifted index must preserve identity');
+assert.equal(validateEvidence([],[]),true,'manual independent record must remain');
+assert.equal(safeMoney('12,50'),12.5);
+assert.equal(parseExtraction('```json\n{"changes":[]}\n```').length,0);
+assert.throws(()=>parseExtraction('{"other":[]}'));
+assert.equal(messageKey(source[0]),messageKey(same[0]));
+console.log('10 verification checks: PASSED');

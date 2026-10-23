@@ -5,7 +5,8 @@
   "optional": [],
   "js": "index.js",
   "css": "style.css",
-  "author": "Ena Desktop project",
-  "version": "0.1.0",
-  "auto_update": false
+  "author": "amoktzx / Ena Desktop project",
+  "version": "1.0.0-beta.1",
+  "auto_update": false,
+  "homePage": "https://github.com/amoktzx/EnaJJBA-Desktop-ST"
 }

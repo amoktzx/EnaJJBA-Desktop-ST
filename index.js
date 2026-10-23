@@ -1,8 +1,9 @@
+import { createBeta } from './beta.js';
 /* Ena Desktop 2001 — independent client-only SillyTavern UI extension. MIT.
    No generation, context injection, Memory Books or chat edits in v0.1. */
 const ENA = (() => {
   'use strict';
-  const VERSION = '0.1.0';
+  const VERSION = '1.0.0-beta.1';
   const META_KEY = 'ena_desktop_v1';
   const SETTING_KEY = 'ena_desktop_2001';
   const ROOT = new URL('./', import.meta.url);
@@ -15,13 +16,13 @@ const ENA = (() => {
   ];
   const titles = Object.fromEntries(apps.map(a=>[a[0],a[1]]));
   const icons = Object.fromEntries(apps.map(a=>[a[0],url('icons/'+a[2]+'.svg')]));
-  const progressNames={planned:'В планах',seen:'Просмотрено',started:'Начато',found:'Обнаружено',unseen:'Не просмотрено',viewed:'Просмотрено',studied:'Исследовано'};
+  const progressNames={planned:'В планах',seen:'Просмотрено',started:'Начато',found:'Обнаружено',unseen:'Не просмотрено',viewed:'Просмотрено',studied:'Исследовано',read:'Прочитано',listened:'Прослушано',possessed:'На руках',transferred:'Передано',lost:'Утрачено'};
   const categories = {
     films: ['Фильмография','фильм'], music:['Дискография','запись'],
     books:['Библиография','книга'], anomalies:['Аномалии','объект']
   };
-  let root, fab, lastHandled = null, running = false, zCounter=90, saveTimer = null, localWallpaper = null;
-  const ui = { windows: new Map(), active: null, start:false, calendar:false, calendarMonth:null, tab:{archive:'films',salon:'overview',gm:'overview',directory:'people'}, filter:'all', adding:null };
+  let root, fab, lastHandled = null, running = false, zCounter=90, saveTimer = null, searchTimer = null, localWallpaper = null;
+  const ui = { windows: new Map(), active: null, start:false, calendar:false, calendarMonth:null, tab:{archive:'films',salon:'overview',gm:'overview',directory:'people',mail:'inbox',sms:'inbox'}, filter:'all', search:'', adding:null, archiveEditor:null };
   const fallbackMeta = {};
   const settingsDefault = { autoOpen:true, showFab:true, wallpaper:'city', iconSize:56, wallpaperUrl:'' };
   const esc = s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -58,6 +59,7 @@ const ENA = (() => {
     saveTimer=setTimeout(()=>{if(currentBag===ctx()?.chatMetadata)saveMeta();},700);
   }
   function toast(message){const n=root?.querySelector('.ena-toast');if(!n)return;n.textContent=message;n.classList.add('ena-toast-visible');clearTimeout(toast.timer);toast.timer=setTimeout(()=>n.classList.remove('ena-toast-visible'),2600);}
+  const beta = createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fillWindow,ui,oldComputer:computerHTML,oldNotes:notesHTML});
   function generateShell(){
     root=document.createElement('div'); root.id='ena-desktop-root';root.hidden=true;
     root.innerHTML=`<div class="ena-screen" role="dialog" aria-label="Ноутбук Ены" aria-modal="true">
@@ -73,7 +75,7 @@ const ENA = (() => {
     root.addEventListener('change',handleChange);
     root.addEventListener('input',handleInput);
     root.addEventListener('pointerdown',handlePointerDown);
-    root.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(ui.start||ui.calendar){ui.start=false;ui.calendar=false;renderMenus();}else shutdown(false);}});
+    root.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(ui.archiveEditor){ui.archiveEditor=null;fillWindow('archive');}else if(ui.start||ui.calendar){ui.start=false;ui.calendar=false;renderMenus();}else shutdown(false);}});
     document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&!root.hidden&&ev.target.closest?.('#ena-desktop-root')){ev.preventDefault();}});
     fab=document.createElement('button');fab.id='ena-desktop-fab';fab.type='button';fab.title='Ноутбук Ены';fab.setAttribute('aria-label','Открыть ноутбук Ены');
     fab.innerHTML=icon('computer',35); document.body.appendChild(fab);
@@ -99,8 +101,8 @@ const ENA = (() => {
   }
   function focusWindow(key){const el=ui.windows.get(key);if(!el)return;el.style.zIndex=String(++zCounter);ui.active=key;ui.windows.forEach((w,k)=>w.classList.toggle('ena-focused',k===key)); renderTaskbar();}
   function defaultGeometry(key){
-    const width=Math.min(window.innerWidth-40,key==='archive'?780:key==='salon'?760:key==='gm'?720:650);
-    const height=Math.min(window.innerHeight-86,key==='archive'?550:key==='gm'?530:490);
+    const width=Math.min(window.innerWidth-40,key==='archive'?950:key==='salon'?900:key==='gm'?980:650);
+    const height=Math.min(window.innerHeight-86,key==='archive'?650:key==='gm'?660:key==='salon'?620:490);
     const count=ui.windows.size;
     return {x:Math.max(12,Math.min(window.innerWidth-width-10,225+(count%4)*34)),y:Math.max(12,Math.min(window.innerHeight-height-65,78+(count%4)*30)),w:width,h:height};
   }
@@ -118,11 +120,11 @@ const ENA = (() => {
   }
   function fillWindow(key){const el=ui.windows.get(key);if(!el)return;
     let content='';switch(key){
-      case 'archive':content=archiveHTML();break;case 'salon':content=salonHTML();break;
-      case 'directory':content=directoryHTML();break;case 'notes':content=notesHTML();break;
-      case 'computer':content=computerHTML();break;case 'gm':content=gmHTML();break;
-      case 'mail':content=placeholderHTML('Почтовый ящик','Письма будут появляться здесь после подключения синхронизации с сюжетом. Никаких придуманных писем пока нет.','mail');break;
-      case 'sms':content=placeholderHTML('SMS / Пейджер','Архив сообщений появится после интеграции с историей чата. Это не копирует переписку из Phone-ST автоматически.','sms');break;
+      case 'archive':content=archiveHTML();break;case 'salon':content=beta.view('salon');break;
+      case 'directory':content=beta.view('directory');break;case 'notes':content=beta.view('notes');break;
+      case 'computer':content=beta.view('computer');break;case 'gm':content=beta.view('gm');break;
+      case 'mail':content=beta.view('mail');break;
+      case 'sms':content=beta.view('sms');break;
     }
     el.querySelector('.ena-window-body').innerHTML=content;
   }
@@ -130,15 +132,83 @@ const ENA = (() => {
   const tabs=(name,choices)=>`<div class="ena-tabs" role="tablist">${choices.map(([k,t])=>`<button type="button" class="ena-tab ${ui.tab[name]===k?'ena-tab-on':''}" data-tab-group="${name}" data-tab="${k}">${esc(t)}</button>`).join('')}</div>`;
   const empty=(headline,sub='')=>`<div class="ena-empty">${icon('folder',50)}<b>${esc(headline)}</b><p>${esc(sub)}</p></div>`;
   const placeholderHTML=(title,desc,app)=>heading(title)+`<div class="ena-content">${empty('Пока нет записей',desc)}<div class="ena-hint">Окно готово; синхронизация появится в отдельной версии. Ничего не отправляется в чат.</div></div>`;
-  function archiveHTML(){const cat=ui.tab.archive;const rows=meta().archive[cat];const name=categories[cat][0];
-    const filters=[['all','Все'],['seen','Просмотрено / изучено'],['planned','В планах'],['revisit','Пересмотреть']];
-    const shown=rows.filter(r=>ui.filter==='all'||(ui.filter==='revisit'?r.revisit:ui.filter==='seen'?['seen','studied','viewed','read','listened'].includes(r.progress):['planned','unseen','found'].includes(r.progress)));
-    let cards=shown.length?`<div class="ena-media-grid">${shown.map(r=>`<article class="ena-media-card"><div class="ena-media-art">${icon(cat==='films'?'archive':cat==='music'?'sms':cat==='books'?'notes':'gm',45)}</div><div class="ena-media-data"><b>${esc(r.title)}</b><small>${esc(r.year||'')} ${esc(progressNames[r.progress]||r.progress||'')}</small><div class="ena-media-badges">${r.revisit?'<span class="ena-tag">↻ Пересмотреть</span>':''}${r.ownership==='personal'?'<span class="ena-tag">Моё</span>':''}</div><div class="ena-card-buttons"><button data-action="cycle-progress" data-id="${esc(r.id)}" title="Сменить статус">✓ Статус</button><button data-action="toggle-revisit" data-id="${esc(r.id)}" title="Надо пересмотреть">↻</button><button data-action="delete-record" data-scope="archive-${cat}" data-id="${esc(r.id)}" title="Удалить">×</button></div></div></article>`).join('')}</div>`:empty('Коллекция пока пуста','Сюда попадут только известные Ене произведения и находки. Пока записи добавляются вручную.');
-    return heading('Мой архив')+tabs('archive',Object.entries(categories).map(([k,v])=>[k,v[0]]))+
-      `<div class="ena-subtoolbar"><label>Фильтр <select data-select="archive-filter">${filters.map(([k,v])=>`<option value="${k}" ${ui.filter===k?'selected':''}>${v}</option>`).join('')}</select></label><button data-action="show-add" data-kind="archive" class="ena-control">+ Добавить</button></div>`+
-      (ui.adding==='archive'?`<form class="ena-add-form" data-form="archive"><input name="title" maxlength="160" required placeholder="Название ${esc(categories[cat][1])}"><input name="year" maxlength="12" placeholder="Год"><select name="progress">${(cat==='anomalies'?[['found','Обнаружено'],['unseen','Не просмотрено'],['viewed','Просмотрено'],['studied','Исследовано']]:[['planned','В планах'],['seen',cat==='films'?'Просмотрено':cat==='books'?'Прочитано':'Прослушано'],['started','Начато']]).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><label><input type="checkbox" name="owned"> Личная копия</label><button type="submit">Сохранить</button></form>`:'')+
-      `<div class="ena-content ena-scroll">${cards}</div><div class="ena-statusline">${name} · записей: ${rows.length} · без автоподстановки из видеосалона</div>`;
+  // Archive is intentionally personal. Salon licenses never populate this collection.
+  const archiveStatusOptions={
+    films:[['planned','Не просмотрено / в планах'],['started','Смотрит сейчас'],['seen','Просмотрено']],
+    music:[['planned','Не прослушано / в планах'],['started','Слушает сейчас'],['listened','Прослушано']],
+    books:[['planned','Не прочитано / в планах'],['started','Читает сейчас'],['read','Прочитано']],
+    anomalies:[['found','Обнаружено'],['possessed','На руках'],['transferred','Передано'],['lost','Утрачено']]
+  };
+  const completedProgress={films:'seen',music:'listened',books:'read'};
+  const catEmoji={films:'▣',music:'♫',books:'▤',anomalies:'◉'};
+  const archiveFilters=[['all','Все записи'],['finished','Завершено'],['todo','Не просмотрено / в планах'],['revisit','Надо пересмотреть'],['favorites','Избранное'],['owned','Личные копии']];
+  function coverSrc(r){const s=String(r.cover||'').trim();return /^(https:\/\/|data:image\/(?:jpeg|png|webp);base64,)/i.test(s)?s:'';}
+  function archiveStatus(cat,r){if(cat==='anomalies')return progressNames[r.progress]||'Обнаружено';
+    if(r.progress===completedProgress[cat]||r.progress==='seen'&&cat==='films')return cat==='books'?'Прочитано':cat==='music'?'Прослушано':'Просмотрено';
+    if(r.progress==='started')return 'В процессе';
+    return cat==='films'?'Не просмотрено':cat==='music'?'Не прослушано':'Не прочитано';}
+  function mediaArtwork(r,cat){const src=coverSrc(r);return `<div class="ena-cover ena-cover-${cat}">${src?`<img class="ena-cover-image" src="${esc(src)}" alt="Обложка: ${esc(r.title)}" loading="lazy" referrerpolicy="no-referrer">`:`<div class="ena-cover-placeholder"><span>${catEmoji[cat]}</span><small>${esc(categories[cat][0])}</small></div>`}</div>`;}
+  function archiveEditorHTML(cat){const id=ui.archiveEditor?.id;const r=(meta().archive[cat]||[]).find(x=>x.id===id)||{};
+    const mode=id?'Редактировать запись':'Новая запись';const options=archiveStatusOptions[cat]||[];
+    return `<div class="ena-editor-backdrop"><form class="ena-editor" data-form="archive" data-edit-id="${esc(id||'')}" aria-label="${mode}">
+      <div class="ena-editor-head"><b>${mode} · ${esc(categories[cat][0])}</b><button type="button" data-action="archive-cancel" aria-label="Закрыть">✕</button></div>
+      <div class="ena-editor-grid">
+        <div class="ena-form-col">
+          <label>Название *<input name="title" required maxlength="160" value="${esc(r.title||'')}" placeholder="Название произведения / носителя"></label>
+          <label>${cat==='anomalies'?'Тип / формат':'Год'}<input name="year" maxlength="40" value="${esc(r.year||'')}" placeholder="${cat==='anomalies'?'VHS, CD, DVD, предмет…':'Например, 1997'}"></label>
+          <label>${cat==='anomalies'?'Где находится / статус':'Статус'}<select name="progress">${options.map(([k,t])=>`<option value="${k}" ${r.progress===k?'selected':''}>${t}</option>`).join('')}</select></label>
+          ${cat==='anomalies'?`<label>Связь со стендом<select name="standStatus">${[['unknown','Не установлена'],['suspected','Подозревается'],['confirmed','Подтверждена']].map(([k,t])=>`<option value="${k}" ${(r.standStatus||'unknown')===k?'selected':''}>${t}</option>`).join('')}</select></label><label>Местонахождение<input name="location" maxlength="160" value="${esc(r.location||'')}"></label>`:
+            `<label>Дата знакомства / просмотра<input name="eventDate" type="text" maxlength="70" value="${esc(r.eventDate||'')}" placeholder="Например, 27.04.2001 или неизвестна"></label><label class="ena-check"><input type="checkbox" name="owned" ${r.ownership==='personal'?'checked':''}> Куплено / принадлежит Ене лично</label><label class="ena-check"><input type="checkbox" name="revisit" ${r.revisit?'checked':''}> ${cat==='films'?'Надо пересмотреть':cat==='books'?'Надо перечитать':'Надо переслушать'}</label>`}
+          <label class="ena-check"><input type="checkbox" name="favorite" ${r.favorite?'checked':''}> ★ Избранное</label>
+          ${cat==='anomalies'?`<label class="ena-check"><input type="checkbox" name="anomalyViewed" ${r.anomalyViewed||r.progress==='viewed'?'checked':''}> Содержимое просмотрено</label><label class="ena-check"><input type="checkbox" name="anomalyStudied" ${r.anomalyStudied||r.progress==='studied'?'checked':''}> Объект исследован</label>`:''}
+        </div>
+        <div class="ena-form-col">
+          <label>Обложка / фотография — ссылка https://<input name="coverUrl" type="url" placeholder="https://..." value="${esc(coverSrc(r).startsWith('https://')?r.cover:'')}"></label>
+          <label>Или выбрать изображение с устройства<input type="file" name="coverFile" accept="image/png,image/jpeg,image/webp"></label>
+          ${coverSrc(r)?`<label class="ena-check"><input type="checkbox" name="removeCover"> Удалить текущую обложку</label>`:''}
+          <small>Файлы сжимаются для экономии места в сохранении чата. При отсутствии изображения — обычная ретро-обложка.</small>
+          <label>Личные заметки<textarea name="detail" rows="5" maxlength="2400" placeholder="Только известное Ене; никаких автоматически придуманных воспоминаний">${esc(r.detail||'')}</textarea></label>
+          <label>Источник / ссылка на сообщение (необязательно)<input name="source" maxlength="240" value="${esc(r.source||'')}" placeholder="Например, сообщение №1117"></label>
+        </div>
+      </div>
+      <div class="ena-editor-foot">${id?`<button type="button" data-action="delete-record" data-scope="archive-${cat}" data-id="${esc(id)}">Удалить запись</button>`:''}<button type="button" data-action="archive-cancel">Отмена</button><button type="submit" class="ena-primary">${id?'Сохранить изменения':'Добавить в Архив'}</button></div>
+    </form></div>`;
   }
+  function archiveHTML(){const cat=ui.tab.archive;const rows=meta().archive[cat].filter(r=>beta.archiveValid(r));const name=categories[cat][0];
+    const term=ui.search.trim().toLocaleLowerCase('ru');
+    const filtered=rows.filter(r=>{
+      if(term&&!`${r.title||''} ${r.year||''} ${r.detail||''}`.toLocaleLowerCase('ru').includes(term))return false;
+      if(ui.filter==='favorites')return !!r.favorite;
+      if(ui.filter==='owned')return r.ownership==='personal';
+      if(ui.filter==='revisit')return !!r.revisit;
+      if(ui.filter==='finished')return cat==='anomalies'?!!(r.anomalyViewed||r.anomalyStudied||r.progress==='viewed'||r.progress==='studied'):r.progress===completedProgress[cat]||r.progress==='seen'&&cat==='films';
+      if(ui.filter==='todo')return cat==='anomalies'?!r.anomalyViewed:r.progress!==completedProgress[cat]&&!(r.progress==='seen'&&cat==='films');
+      return true;
+    });
+    const cards=filtered.length?`<div class="ena-library-grid">${filtered.map(r=>`<article class="ena-library-card" data-record="${esc(r.id)}">
+        <button type="button" class="ena-cover-button" data-action="archive-edit" data-id="${esc(r.id)}" aria-label="Открыть карточку ${esc(r.title)}">${mediaArtwork(r,cat)}</button>
+        <div class="ena-library-text"><button type="button" class="ena-record-title" data-action="archive-edit" data-id="${esc(r.id)}">${esc(r.title)}</button><small>${esc(r.year||'Год неизвестен')}</small>
+          <div class="ena-card-meta"><span class="ena-record-state ${cat==='anomalies'?'ena-state-anomaly':''}">${esc(archiveStatus(cat,r))}</span>${r.ownership==='personal'?'<span title="Личная копия">⌑ Моё</span>':''}</div>
+          ${cat==='anomalies'?`<div class="ena-card-meta">${r.anomalyViewed||r.progress==='viewed'?'<span>✓ Просмотрено</span>':'<span>○ Не просмотрено</span>'}${r.anomalyStudied||r.progress==='studied'?'<span>⌕ Исследовано</span>':''}</div>`:''}
+          <div class="ena-archive-actions"><button type="button" data-action="archive-favorite" data-id="${esc(r.id)}" title="${r.favorite?'Убрать из избранного':'В избранное'}">${r.favorite?'★':'☆'}</button>${cat!=='anomalies'?`<button type="button" data-action="toggle-revisit" data-id="${esc(r.id)}" title="${cat==='films'?'Пересмотреть':cat==='books'?'Перечитать':'Переслушать'}" class="${r.revisit?'ena-revisit-active':''}">↻</button>`:''}<button type="button" data-action="archive-edit" data-id="${esc(r.id)}" title="Подробности">✎</button></div>
+        </div></article>`).join('')}</div>`:empty(rows.length?'Ничего не найдено':'Личный архив пока пуст',rows.length?'Измени поиск или фильтры.':'Добавляй фильмы, музыку, книги и необычные находки. Лицензии видеосалона сюда не переносятся.');
+    const completed=rows.filter(r=>cat==='anomalies'?r.anomalyViewed||r.progress==='viewed':r.progress===completedProgress[cat]||r.progress==='seen'&&cat==='films').length;
+    const highlights=cat==='anomalies'?`<span>${completed} просмотрено</span>`:`<span>${completed} завершено</span><span>${rows.filter(r=>r.revisit).length} повторить</span>`;
+    return heading('Мой архив')+tabs('archive',Object.entries(categories).map(([k,v])=>[k,v[0]]))+
+      `<div class="ena-archive-tools"><label class="ena-archive-search">⌕ <input type="search" data-field="archive-search" placeholder="Поиск по архиву" value="${esc(ui.search)}"></label><button type="button" class="ena-control" data-action="archive-add">✚ Добавить запись</button></div>
+      <div class="ena-archive-body"><aside class="ena-archive-sidebar"><span class="ena-aside-head">${esc(name)}</span>
+        ${(cat==='anomalies'?[['all','Все объекты'],['finished','Просмотрено / исследовано'],['todo','Не просмотрено'],['favorites','Избранное']]:archiveFilters).map(([k,t])=>`<button type="button" class="ena-side-option ${ui.filter===k?'ena-side-active':''}" data-filter="${k}">${k==='favorites'?'☆':k==='revisit'?'↻':k==='finished'?'✓':k==='todo'?'○':k==='owned'?'⌑':'▤'} ${cat==='anomalies'&&k==='revisit'?'Требует внимания':esc(t)}</button>`).join('')}
+        <div class="ena-archive-summary"><b>В коллекции</b><strong>${rows.length}</strong>${highlights}</div>
+      </aside><main class="ena-archive-results">${cards}</main></div>
+      <div class="ena-statusline">${esc(name)} · ${rows.length} записей · личный архив, отдельно от видеосалона</div>${ui.archiveEditor?archiveEditorHTML(cat):''}`;
+  }
+  function selectedArchiveRecord(id){return meta().archive[ui.tab.archive].find(r=>r.id===id);}
+  function archiveOpenEditor(id=null){ui.archiveEditor={id,category:ui.tab.archive};fillWindow('archive');}
+  function tinyCover(file){return new Promise((resolve,reject)=>{const temp=URL.createObjectURL(file),img=new Image();img.onload=()=>{try{
+      const scale=Math.min(1,280/img.width,420/img.height),cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(img.width*scale));cv.height=Math.max(1,Math.round(img.height*scale));cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+      let result=cv.toDataURL('image/jpeg',0.66);if(result.length>110000)result=cv.toDataURL('image/jpeg',0.42);
+      URL.revokeObjectURL(temp);if(result.length>110000)reject(Error('Изображение слишком велико после сжатия'));else resolve(result);
+    }catch(e){URL.revokeObjectURL(temp);reject(e);}};img.onerror=()=>{URL.revokeObjectURL(temp);reject(Error('Не удалось открыть изображение'));};img.src=temp;});}
   function salonHTML(){const s=meta().salon;const t=ui.tab.salon;
     const rows=t==='licenses'?s.licenses:t==='tasks'?s.tasks:t==='finance'?s.transactions:t==='documents'?s.documents:null;
     const view=rows? (rows.length?`<div class="ena-row-list">${rows.map(item=>`<div class="ena-data-row"><span>${esc(item.title)}</span><small>${esc(item.detail)}</small><button data-action="delete-record" data-scope="salon-${t}" data-id="${esc(item.id)}">×</button></div>`).join('')}</div>`:empty('Записей пока нет','Добавляй только подтверждённые факты. Это отдельный от личного Архива учёт.')):
@@ -164,7 +234,7 @@ const ENA = (() => {
     const first=(new Date(y,month,1).getDay()+6)%7,days=new Date(y,month+1,0).getDate();const weeks=[];for(let i=0;i<first;i++)weeks.push('<span></span>');for(let day=1;day<=days;day++){const selected=m.gameDate===`${y}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;weeks.push(`<button type="button" data-action="day-select" data-day="${day}" data-month="${month}" data-year="${y}" class="${selected?'ena-cal-selected':''}">${day}</button>`);}const monthName=new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric'}).format(new Date(y,month,1));
     return `<div class="ena-calendar-popup"><div class="ena-cal-heading"><button data-action="cal-prev">◀</button><b>${esc(monthName)}</b><button data-action="cal-next">▶</button></div><div class="ena-cal-grid">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(s=>`<strong>${s}</strong>`).join('')}${weeks.join('')}</div><div class="ena-cal-hint">${m.gameDate?'Сюжетная дата • выбрать день':'Дата сюжета не задана. Выбери день.'}</div></div>`;
   }
-  function doAction(action,el){const key=el.dataset.app,id=el.dataset.id;
+  function doAction(action,el){if(beta.action(action,el))return;const key=el.dataset.app,id=el.dataset.id;
     if(action==='start'){ui.start=!ui.start;ui.calendar=false;renderMenus();return;}
     if(action==='calendar'){ui.calendar=!ui.calendar;ui.start=false;ui.calendarMonth=null;renderMenus();return;}
     if(action==='shutdown'){shutdown(true);return;}
@@ -173,32 +243,54 @@ const ENA = (() => {
     if(action==='close'){ui.windows.get(key)?.remove();ui.windows.delete(key);delete meta().apps[key];ui.active=null;saveMeta();renderTaskbar();return;}
     if(action==='minimize'){ui.windows.get(key)?.classList.add('ena-minimized');ui.active=null;renderTaskbar();return;}
     if(action==='maximize'){const w=ui.windows.get(key);if(!w)return;w.classList.toggle('ena-maximized');focusWindow(key);return;}
+    if(action==='archive-add'){archiveOpenEditor();return;}
+    if(action==='archive-edit'){archiveOpenEditor(id);return;}
+    if(action==='archive-cancel'){ui.archiveEditor=null;fillWindow('archive');return;}
+    if(action==='archive-favorite'){const r=selectedArchiveRecord(id);if(r){r.favorite=!r.favorite;saveMeta();fillWindow('archive');}return;}
     if(action==='show-add'){ui.adding=ui.adding===el.dataset.kind?null:el.dataset.kind;const active=el.closest('.ena-window')?.dataset.app;if(active)fillWindow(active);return;}
     if(action==='cycle-progress'){const cat=ui.tab.archive,r=meta().archive[cat].find(x=>x.id===id);if(r){const cycle=cat==='anomalies'?['found','unseen','viewed','studied']:['planned','started','seen'];r.progress=cycle[(cycle.indexOf(r.progress)+1)%cycle.length];saveMeta();fillWindow('archive');}return;}
     if(action==='toggle-revisit'){const r=meta().archive[ui.tab.archive].find(x=>x.id===id);if(r){r.revisit=!r.revisit;saveMeta();fillWindow('archive');}return;}
     if(action==='delete-record'){let [scope,part]=el.dataset.scope.split('-');let arr=scope==='archive'?meta().archive[part]:scope==='salon'?meta().salon[part==='finance'?'transactions':part==='licenses'?'licenses':part==='tasks'?'tasks':'documents']:scope==='directory'?meta().directory[part]:scope==='gm'?meta().gm[part==='body'?'injuries':part==='items'?'items':'quests']:null;if(!arr)return;
-      if(!confirm('Удалить эту запись? Это не меняет сообщения ролевого чата.'))return;const i=arr.findIndex(x=>x.id===id);if(i>=0)arr.splice(i,1);saveMeta();fillWindow(scope==='salon'?'salon':scope==='directory'?'directory':scope==='archive'?'archive':'gm');return;}
+      if(!confirm('Удалить эту запись? Это не меняет сообщения ролевого чата.'))return;const i=arr.findIndex(x=>x.id===id);if(i>=0)arr.splice(i,1);if(scope==='archive')ui.archiveEditor=null;saveMeta();fillWindow(scope==='salon'?'salon':scope==='directory'?'directory':scope==='archive'?'archive':'gm');return;}
     if(action==='reset-wallpaper'){localWallpaper=null;try{localStorage.removeItem('ena-desktop-wallpaper');}catch{}persistSettings();updateWallpaper();fillWindow('computer');toast('Обои восстановлены');return;}
     if(action==='cal-prev'||action==='cal-next'){const ref=ui.calendarMonth?new Date(ui.calendarMonth[0],ui.calendarMonth[1],1):new Date((meta().gameDate||'2001-01-01')+'T12:00:00');ref.setMonth(ref.getMonth()+(action==='cal-prev'?-1:1));ui.calendarMonth=[ref.getFullYear(),ref.getMonth()];renderMenus();return;}
     if(action==='day-select'){meta().gameDate=`${el.dataset.year}-${String(Number(el.dataset.month)+1).padStart(2,'0')}-${String(el.dataset.day).padStart(2,'0')}`;saveMeta();ui.calendar=false;updateClock();renderMenus();if(ui.windows.has('computer'))fillWindow('computer');return;}
   }
-  function handleClick(ev){const act=ev.target.closest('[data-action]');if(act){ev.preventDefault();doAction(act.dataset.action,act);return;}
+  function handleClick(ev){const ba=ev.target.closest('[data-beta]');if(ba){ev.preventDefault();beta.action(ba.dataset.beta,ba);return;}const act=ev.target.closest('[data-action]');if(act){ev.preventDefault();doAction(act.dataset.action,act);return;}
     const task=ev.target.closest('[data-task]');if(task){const k=task.dataset.task,w=ui.windows.get(k);if(!w)return;if(ui.active===k&&!w.classList.contains('ena-minimized')){w.classList.add('ena-minimized');ui.active=null;renderTaskbar();}else {w.classList.remove('ena-minimized');focusWindow(k);}return;}
-    const tab=ev.target.closest('[data-tab]');if(tab){ui.tab[tab.dataset.tabGroup]=tab.dataset.tab;ui.adding=null;ui.filter='all';fillWindow(tab.dataset.tabGroup);return;}
+    const tab=ev.target.closest('[data-tab]');if(tab){ui.tab[tab.dataset.tabGroup]=tab.dataset.tab;ui.adding=null;ui.filter='all';ui.search='';ui.archiveEditor=null;fillWindow(tab.dataset.tabGroup);return;}
+    const filter=ev.target.closest('[data-filter]');if(filter){ui.filter=filter.dataset.filter;fillWindow('archive');return;}
     const shortcut=ev.target.closest('.ena-desktop-icon');if(shortcut){if(window.matchMedia?.('(pointer:coarse)')?.matches){openWindow(shortcut.dataset.open);}else shortcut.focus();return;}
     const win=ev.target.closest('.ena-window');if(win)focusWindow(win.dataset.app);
     if(!ev.target.closest('.ena-start-menu,.ena-start-button')){ui.start=false;renderMenus();}
   }
   function handleDoubleClick(ev){const shortcut=ev.target.closest('[data-open]');if(shortcut)openWindow(shortcut.dataset.open);}
-  function handleSubmit(ev){const form=ev.target.closest('form[data-form]');if(!form)return;ev.preventDefault();const fd=new FormData(form),kind=form.dataset.form,active=form.closest('.ena-window')?.dataset.app,title=String(fd.get('title')||'').trim();if(!title)return;
+  async function handleSubmit(ev){const betaForm=ev.target.closest('form[data-beta-form]');if(betaForm){beta.submit(betaForm,ev);return;}const form=ev.target.closest('form[data-form]');if(!form)return;ev.preventDefault();const fd=new FormData(form),kind=form.dataset.form,active=form.closest('.ena-window')?.dataset.app,title=String(fd.get('title')||'').trim();if(!title)return;
+    if(kind==='archive'){
+      const cat=ui.tab.archive,editId=form.dataset.editId,previous=editId?selectedArchiveRecord(editId):null;
+      const item=previous||{id:uid()};
+      const requestedUrl=String(fd.get('coverUrl')||'').trim();
+      const file=fd.get('coverFile');
+      if(requestedUrl&&!/^https:\/\//i.test(requestedUrl)){toast('Для обложки нужна ссылка https://');return;}
+      let cover=fd.get('removeCover')?'':(item.cover||'');
+      if(requestedUrl)cover=requestedUrl.slice(0,1200);
+      if(file instanceof File&&file.size){if(file.size>5_000_000){toast('Файл должен быть не более 5 МБ');return;}
+        try{cover=await tinyCover(file);}catch(e){toast(e.message||'Ошибка загрузки обложки');return;}}
+      const newFields={title:title.slice(0,160),detail:String(fd.get('detail')||'').trim().slice(0,2400),year:String(fd.get('year')||'').trim().slice(0,40),progress:String(fd.get('progress')||'planned'),cover,
+        favorite:fd.has('favorite'),source:String(fd.get('source')||'').trim().slice(0,240)};
+      if(cat==='anomalies')Object.assign(newFields,{standStatus:String(fd.get('standStatus')||'unknown'),location:String(fd.get('location')||'').trim().slice(0,160),anomalyViewed:fd.has('anomalyViewed'),anomalyStudied:fd.has('anomalyStudied')});
+      else Object.assign(newFields,{ownership:fd.has('owned')?'personal':'unknown',revisit:fd.has('revisit'),eventDate:String(fd.get('eventDate')||'').trim().slice(0,70)});
+      Object.assign(item,newFields);
+      if(!previous)meta().archive[cat].push(item);
+      ui.archiveEditor=null;saveMeta();fillWindow('archive');toast(previous?'Запись обновлена':'Добавлено в личный Архив');return;
+    }
     const item={id:uid(),title:title.slice(0,160),detail:String(fd.get('detail')||'').trim().slice(0,400)};
-    if(kind==='archive'){item.year=String(fd.get('year')||'').trim().slice(0,12);item.progress=String(fd.get('progress')||'planned');item.ownership=fd.get('owned')?'personal':'unknown';item.revisit=false;meta().archive[ui.tab.archive].push(item);}
-    else if(kind==='salon'){const t=ui.tab.salon,arr=meta().salon[t==='finance'?'transactions':t];arr.push(item);}
+    if(kind==='salon'){const t=ui.tab.salon,arr=meta().salon[t==='finance'?'transactions':t];arr.push(item);}
     else if(kind==='directory')meta().directory[ui.tab.directory].push(item);
     else if(kind==='gm'){const t=ui.tab.gm;meta().gm[t==='body'?'injuries':t==='items'?'items':'quests'].push(item);}
     saveMeta();ui.adding=null;fillWindow(active);toast('Запись сохранена');
   }
-  function handleChange(ev){const el=ev.target,field=el.dataset.field,selection=el.dataset.select,s=settings(),m=meta();
+  function handleChange(ev){if(beta.change(ev.target,ev))return;const el=ev.target,field=el.dataset.field,selection=el.dataset.select,s=settings(),m=meta();
     if(selection==='archive-filter'){ui.filter=el.value;fillWindow('archive');return;}
     if(selection==='wallpaper'){s.wallpaper=el.value;localWallpaper=null;try{localStorage.removeItem('ena-desktop-wallpaper');}catch{}persistSettings();updateWallpaper();return;}
     if(field==='game-date'){m.gameDate=el.value;saveMeta();updateClock();return;}
@@ -213,7 +305,7 @@ const ENA = (() => {
       };img.src=reader.result;
     };reader.readAsDataURL(file);return;}
   }
-  function handleInput(ev){const field=ev.target.dataset.field;if(field==='notes'){meta().notes=ev.target.value;queueSave();return;}if(field==='icon-size'){settings().iconSize=Number(ev.target.value);persistSettings();updateWallpaper();ev.target.nextElementSibling&&(ev.target.nextElementSibling.textContent=ev.target.value+' px');}}
+  function handleInput(ev){if(beta.input(ev.target))return;const field=ev.target.dataset.field;if(field==='archive-search'){ui.search=ev.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(()=>{const cur=root.querySelector('[data-field=archive-search]');const selection=cur?{start:cur.selectionStart,end:cur.selectionEnd}:null;fillWindow('archive');const next=root.querySelector('[data-field=archive-search]');if(next){next.focus();if(selection)next.setSelectionRange(selection.start,selection.end);}},240);return;}if(field==='notes'){meta().notes=ev.target.value;queueSave();return;}if(field==='icon-size'){settings().iconSize=Number(ev.target.value);persistSettings();updateWallpaper();ev.target.nextElementSibling&&(ev.target.nextElementSibling.textContent=ev.target.value+' px');}}
   function handlePointerDown(ev){const title=ev.target.closest('.ena-titlebar');if(!title||ev.target.closest('button')||ev.button!==0)return;const win=title.closest('.ena-window');if(!win||win.classList.contains('ena-maximized')||window.innerWidth<700)return;
     focusWindow(win.dataset.app);
     const startX=ev.clientX,startY=ev.clientY,x=win.offsetLeft,y=win.offsetTop;
@@ -229,7 +321,7 @@ const ENA = (() => {
     if(closed.test(text)){if(running)shutdown(false);return;}
     if(opened.test(text)&&!/(?:Ена\s+(?:не|никогда)\s+(?:открыла|включила)|Ена[^.!?\n]{0,30}?не\s+(?:открыла|включила))/i.test(text))boot();
   }
-  function init(){if(document.getElementById('ena-desktop-root'))return;generateShell();const saved=(()=>{try{return localStorage.getItem('ena-desktop-wallpaper')}catch{return null}})();if(saved&&saved.startsWith('data:image/')){localWallpaper=saved;updateWallpaper();}
+  function init(){if(document.getElementById('ena-desktop-root'))return;generateShell();beta.initialize();const saved=(()=>{try{return localStorage.getItem('ena-desktop-wallpaper')}catch{return null}})();if(saved&&saved.startsWith('data:image/')){localWallpaper=saved;updateWallpaper();}
     const c=ctx();if(c?.eventSource?.on&&c?.event_types){
       if(c.event_types.MESSAGE_SENT)c.eventSource.on(c.event_types.MESSAGE_SENT,onMessageSent);
       if(c.event_types.CHAT_CHANGED)c.eventSource.on(c.event_types.CHAT_CHANGED,()=>{clearTimeout(saveTimer);lastHandled=null;if(running){shutdown(false);boot();}});
