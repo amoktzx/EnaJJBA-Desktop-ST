@@ -267,3 +267,23 @@
 #ena-desktop-root .ena-scan-progress{background:#edeae3;border:2px inset #999;height:20px;max-width:100%;overflow:hidden;margin-top:14px;}
 #ena-desktop-root .ena-scan-progress span{display:block;height:100%;background:#3565a2;transition:width .15s;}
 #ena-desktop-root .ena-beta-controls{flex-wrap:wrap;gap:8px;}
+
+/* Beta 3: named GM connection profiles, atomic facts, visible import control. */
+#ena-desktop-root .ena-beta-file-hidden{display:none !important;}
+#ena-desktop-root .ena-api-picker{display:flex;flex-direction:column;gap:8px;margin:8px 0 11px;padding:10px 12px;background:#e1dfd8;border:1px solid #9c9a91;box-shadow:inset 1px 1px white;color:#2d2f38;}
+#ena-desktop-root .ena-api-picker label{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+#ena-desktop-root .ena-api-picker select{min-width:min(100%,360px);max-width:100%;padding:6px;background:#fff;border:2px solid;border-color:#797978 #fff #fff #797978;color:#1e2432;font-family:Tahoma,Verdana,sans-serif;}
+#ena-desktop-root .ena-api-picker p{margin:0;font-size:12px;line-height:1.4;}
+#ena-desktop-root .ena-api-picker small{color:#7b3932;font-size:12px;}
+#ena-desktop-root .ena-fact-badge{display:inline-block !important;margin:7px 0 1px;border:1px solid #a9a5a1;background:#e2e2e1;color:#28324b;padding:2px 7px;font-size:11px;font-weight:bold;}
+#ena-desktop-root .ena-beta-proposal-actions{display:flex !important;gap:7px !important;flex-wrap:wrap;margin-top:9px;}
+#ena-desktop-root .ena-beta-preview{background:#e7e7e3;border:1px solid #b7b3ab;margin:10px 0;padding:8px;}
+#ena-desktop-root .ena-beta-preview summary{cursor:pointer;color:#1d3d75;font-size:12px;font-weight:bold;}
+#ena-desktop-root .ena-beta-preview p{margin:5px 0;font-size:12px;white-space:pre-wrap;}
+#ena-desktop-root .ena-beta-proposal-editor{width:min(680px,95%);max-height:93%;overflow:auto;}
+#ena-desktop-root .ena-beta-proposal-editor fieldset{border:1px solid #88857f;padding:8px;display:flex;flex-direction:column;gap:8px;min-width:0;}
+#ena-desktop-root .ena-beta-proposal-editor legend{font-size:12px;font-weight:bold;}
+#ena-desktop-root .ena-beta-proposal-editor>p{font-size:12px;margin:0;}
+#ena-desktop-root .ena-beta-proposal-editor label{display:flex;flex-direction:column;align-items:stretch;gap:3px;}
+#ena-desktop-root .ena-beta-proposal-editor select{width:100%;min-width:0;}
+@media(max-width:700px){#ena-desktop-root .ena-api-picker select{width:100%;min-width:0;}#ena-desktop-root .ena-beta-proposal-editor{width:96%;padding:9px;}}

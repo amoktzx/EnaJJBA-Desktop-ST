@@ -33,6 +33,7 @@ const SCOPE_OPTIONS={
  'gm:bank':'GM / банк','gm:inventory':'GM / инвентарь','gm:body':'GM / внешние травмы','gm:quests':'GM / основное задание','gm:sidequests':'GM / побочное дело','gm:knowledge':'GM / знания NPC','gm:events':'GM / событие','gm:risks':'GM / обстоятельство'
 };
 const SCOPE_KEYS=Object.keys(SCOPE_OPTIONS);
+const factLabels={objective:'Объективное событие',npc_knowledge:'Знание NPC',npc_suspicion:'Подозрение NPC'};
 const appTabs={
  salon:[['overview','Главная'],['licenses','Лицензии'],['stock','Прокат'],['finance','Финансы'],['documents','Бумаги'],['tasks','Задачи']],
  directory:[['people','Люди'],['places','Места']],
@@ -48,8 +49,8 @@ const p=(s)=>`<p>${encode(s)}</p>`;
 const dateTime=()=>new Date().toISOString();
 
 export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fillWindow,ui,oldComputer,oldNotes}){
-  let editor=null, filter='', extracting=false, lastChatRef=null, pendingTimer=null, lastChangeCount=0, fullScanRunning=false, fullScanStop=false;
-  const defaultConfig={automatic:false,interval:50,review:true,connection:'active',maxContextMessages:50};
+  let editor=null, proposalEditor=null, filter='', extracting=false, lastChatRef=null, pendingTimer=null, lastChangeCount=0, fullScanRunning=false, fullScanStop=false;
+  const defaultConfig={automatic:false,interval:50,review:true,connection:'active',profileId:'',maxContextMessages:50};
   function state(){
     const m=meta();
     if(!m.beta||typeof m.beta!=='object')m.beta={schema:1,records:[],proposals:[],history:[],syncCursor:null,syncRuns:0};
@@ -69,12 +70,49 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
   }
   function queueHistory(summary,persist=true){const b=meta().beta;if(!b)return;b.history.unshift({id:key(),time:dateTime(),summary});b.history=b.history.slice(0,250);if(persist)saveMeta();}
   const messages=()=>ctx()?.chat||[];
+  // Read only the non-secret metadata of the profiles already saved in SillyTavern.
+  function profiles(){
+    const c=ctx();
+    if(c?.extensionSettings?.disabledExtensions?.includes('connection-manager'))return [];
+    return (c?.extensionSettings?.connectionManager?.profiles||[])
+      .filter(x=>x&&typeof x.id==='string'&&typeof x.name==='string'&&x.api)
+      .map(x=>({id:x.id,name:x.name,api:x.api,model:x.model||''}));
+  }
+  function selectedProviderLabel(){
+    const s=settings().enaSync;
+    if(!s.profileId||s.profileId==='active')return 'Активное подключение SillyTavern';
+    const found=profiles().find(x=>x.id===s.profileId);
+    return found?`${found.name} · ${found.model||found.api}`:'Профиль не найден — выбери другой';
+  }
+  function profileSelect(){
+    const s=settings().enaSync;
+    const opts=profiles().map(x=>`<option value="${encode(x.id)}" ${s.profileId===x.id?'selected':''}>${encode(x.name)} (${encode(x.model||x.api)})</option>`).join('');
+    const missing=s.profileId&&s.profileId!=='active'&&!profiles().some(x=>x.id===s.profileId);
+    return `<section class="ena-api-picker"><b>Модель для GM-трекера</b><label>Подключение <select data-beta-setting="profileId"><option value="active" ${!s.profileId||s.profileId==='active'?'selected':''}>Текущее подключение SillyTavern</option>${missing?`<option selected disabled value="${encode(s.profileId)}">⚠ Удалённый профиль — выбери другой</option>`:''}${opts}</select></label><p>Можно выбрать профиль OpenRouter, Route.me или другой из «Connection Manager». Запросы идут напрямую по сохранённому профилю, модель рассказчика не меняется. Ключи не сохраняются в Ena Desktop.</p>${!profiles().length?'<small>Сохранённых профилей не обнаружено. Создай профиль в SillyTavern → API Connections → Connection Profiles.</small>':''}</section>`;
+  }
+  async function requestAI(system,prompt){
+    const c=ctx(), chosen=settings().enaSync.profileId||'active';
+    if(chosen==='active'){
+      if(typeof c?.generateRaw!=='function')throw Error('Активное подключение SillyTavern недоступно');
+      return c.generateRaw({systemPrompt:system,prompt});
+    }
+    if(!profiles().some(x=>x.id===chosen))throw Error('Выбранный профиль подключения недоступен. Выбери другой в GM → Синхронизация');
+    // Official ST request service uses the selected profile without changing the narrator connection.
+    const {ConnectionManagerRequestService:service}=await import('/scripts/extensions/shared.js');
+    const messages=[{role:'system',content:system},{role:'user',content:prompt}];
+    const formatted=service.constructPrompt(messages,chosen);
+    const result=await service.sendRequest(chosen,formatted,3072,{stream:false,extractData:true});
+    if(typeof result==='string')return result;
+    if(typeof result?.content==='string')return result.content;
+    throw Error('Профиль вернул ответ без текстового содержимого');
+  }
+
   const valid=r=>validateEvidence(r.sources||[],messages());
   const records=scope=>state().records.filter(r=>r.scope===scope&&!r.deleted&&valid(r));
   const allActive=()=>state().records.filter(r=>!r.deleted&&valid(r));
   function renderRows(scope,app){const a=records(scope),q=filter.trim().toLocaleLowerCase('ru');const rows=q?a.filter(x=>JSON.stringify([x.title,x.detail,x.extra,x.person,x.date]).toLocaleLowerCase('ru').includes(q)):a;
     if(!rows.length)return `<div class="ena-beta-empty"><div class="ena-beta-folder">▣</div>${p(appEmpty[app]||'Пока записей нет')}<small>${scope.startsWith('gm:')?'Факты GM не передаются в ноутбук Ены.':'Можно добавить вручную или подтвердить событие в синхронизации.'}</small></div>`;
-    return `<div class="ena-beta-records">${rows.map(r=>`<article class="ena-beta-record" data-record="${encode(r.id)}"><div class="ena-beta-record-main"><b>${encode(r.title)}</b><small>${encode(r.date||r.created?.slice(0,10)||'')}</small></div><div class="ena-beta-record-detail">${encode(r.detail||'')}</div><div class="ena-beta-record-meta">${r.extra?`<span>${encode(r.extra)}</span>`:''}${r.amount!==undefined&&r.amount!==''?`<span>${encode(r.amount)} ${encode(r.currency||'₤')}</span>`:''}${r.status==='done'?'<span>✓ Завершено</span>':''}${r.sources?.length?'<span title="Проверяется по сообщению чата">◉ Источник в чате</span>':'<span>✎ Ручная запись</span>'}<button data-beta="edit" data-id="${encode(r.id)}" type="button">Изменить</button><button data-beta="delete" data-id="${encode(r.id)}" type="button">Удалить</button></div></article>`).join('')}</div>`;
+    return `<div class="ena-beta-records">${rows.map(r=>`<article class="ena-beta-record" data-record="${encode(r.id)}"><div class="ena-beta-record-main"><b>${encode(r.title)}</b><small>${encode(r.date||r.created?.slice(0,10)||'')}</small></div><div class="ena-beta-record-detail">${encode(r.detail||'')}</div><div class="ena-beta-record-meta">${r.extra?`<span>${encode(r.extra)}</span>`:''}${r.amount!==undefined&&r.amount!==''?`<span>${encode(r.amount)} ${encode(r.currency||'₤')}</span>`:''}${r.status==='done'?'<span>✓ Завершено</span>':''}${r.factType?`<span>${encode(factLabels[r.factType]||r.factType)}</span>`:''}${r.sources?.length?'<span title="Проверяется по сообщению чата">◉ Источник в чате</span>':'<span>✎ Ручная запись</span>'}<button data-beta="edit" data-id="${encode(r.id)}" type="button">Изменить</button><button data-beta="delete" data-id="${encode(r.id)}" type="button">Удалить</button></div></article>`).join('')}</div>`;
   }
   function heading(title){return `<div class="ena-toolbar"><b>${encode(title)}</b><small>Ena Desktop • 2001</small></div>`;}
   function tabs(app){return `<div class="ena-tabs">${appTabs[app].map(([k,t])=>`<button class="ena-tab ${ui.tab[app]===k?'ena-tab-on':''}" data-tab-group="${app}" data-tab="${k}">${encode(t)}</button>`).join('')}</div>`;}
@@ -98,21 +136,34 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     return heading(label)+tabs(app)+paneHeader(label)+`<div class="ena-content ena-scroll ena-beta-space">${renderRows(scope,app)}</div>${editor?.app===app?editorHTML():''}`;
   }
   function notes(){state();return oldNotes()+`<div class="ena-beta-notes-footer"><button data-beta="notes-list">+ Отдельная заметка</button> <span>Личные мысли за Ену пишет только игрок.</span></div><div class="ena-content ena-scroll ena-beta-space">${renderRows('notes:notes','notes')}</div>${editor?.app==='notes'?editorHTML():''}`;}
-  function computer(){const s=settings().enaSync;const extra=`<section class="ena-beta-settings-extension"><h3>ИИ и синхронизация • Beta</h3><p>Генерация использует активное подключение SillyTavern (OpenRouter или Route.me — в зависимости от выбранного в ST). Новый API-ключ не нужен. Отдельный профиль не переключается автоматически.</p><label><input data-beta-setting="automatic" type="checkbox" ${s.automatic?'checked':''}> Проверять новые блоки автоматически</label><label>Порог сообщений <select data-beta-setting="interval">${[25,50,75,100].map(n=>`<option value="${n}" ${Number(s.interval)===n?'selected':''}>${n}</option>`).join('')}</select></label><label><input data-beta-setting="review" type="checkbox" ${s.review?'checked':''}> Показывать предложения перед применением</label><p class="ena-beta-warning">Даже при отключении подтверждения в этой бете изменения не применяются автоматически. Это защита от ложных сюжетных фактов.</p><button data-beta="scan-last">Проверить последние ${Number(s.interval)||50} сообщений</button><button data-beta="export">Экспорт JSON</button><label class="ena-beta-file">Импорт JSON <input data-beta-input="import" type="file" accept="application/json,.json"></label><p>Записи сохраняются в метаданных чата. Обои — локально в браузере. При обновлении расширения делай резервную копию.</p></section>`;return oldComputer().replace(/Никаких API-запросов и затрат токенов в этой версии\./,'Автоматическая синхронизация включается ниже отдельно.').replace(/<\/div>$/i,extra+'</div>');}
+  function computer(){const s=settings().enaSync;const extra=`<section class="ena-beta-settings-extension"><h3>ИИ и синхронизация • Beta</h3>${profileSelect()}<label><input data-beta-setting="automatic" type="checkbox" ${s.automatic?'checked':''}> Проверять новые блоки автоматически</label><label>Порог сообщений <select data-beta-setting="interval">${[25,50,75,100].map(n=>`<option value="${n}" ${Number(s.interval)===n?'selected':''}>${n}</option>`).join('')}</select></label><label><input data-beta-setting="review" type="checkbox" ${s.review?'checked':''}> Показывать предложения перед применением</label><p class="ena-beta-warning">Даже при отключении подтверждения в этой бете изменения не применяются автоматически. Это защита от ложных сюжетных фактов.</p><button data-beta="scan-last">Проверить последние ${Number(s.interval)||50} сообщений</button><button data-beta="export">Экспорт JSON</button><button type="button" data-beta="choose-import">⬆ Импорт JSON</button><input class="ena-beta-file-hidden" data-beta-input="import" type="file" accept="application/json,.json"><p>Записи сохраняются в метаданных чата. Обои — локально в браузере. При обновлении расширения делай резервную копию.</p></section>`;return oldComputer().replace(/Никаких API-запросов и затрат токенов в этой версии\./,'Автоматическая синхронизация включается ниже отдельно.').replace(/<\/div>$/i,extra+'</div>');}
   function editorHTML(){const scope=editor.scope,r=editor.id?state().records.find(x=>x.id===editor.id):null;const def=TABLES[scope]||['Запись','Название','Подробности'];const finance=scope.endsWith('finance')||scope.endsWith('bank');const isCommunication=scope.startsWith('mail:')||scope.startsWith('sms:');
     return `<div class="ena-editor-backdrop"><form class="ena-beta-editor ena-editor" data-beta-form="record" data-id="${encode(editor.id||'')}"><div class="ena-editor-head"><b>${r?'Изменить':'Добавить'} · ${encode(def[0])}</b><button type="button" data-beta="cancel">×</button></div><label>${encode(def[1])} <input name="title" maxlength="180" required value="${encode(r?.title||'')}"></label><label>${encode(def[2])}<textarea name="detail" rows="5" maxlength="3000">${encode(r?.detail||'')}</textarea></label><div class="ena-beta-form-grid"><label>${isCommunication?'От кого / кому':'Дополнительно / местоположение'}<input name="extra" maxlength="280" value="${encode(r?.extra||'')}"></label><label>Дата в сюжете <input name="date" maxlength="80" placeholder="например, 30.04.2001" value="${encode(r?.date||'')}"></label>${finance?`<label>Сумма (+ доход, − расход)<input name="amount" type="number" step="0.01" value="${encode(r?.amount??'')}"></label><label>Валюта <input name="currency" maxlength="12" value="${encode(r?.currency||'₤')}"></label>`:''}<label>Статус <select name="status"><option value="active" ${(r?.status||'active')==='active'?'selected':''}>Активно</option><option value="done" ${r?.status==='done'?'selected':''}>Завершено / исполнено</option><option value="planned" ${r?.status==='planned'?'selected':''}>В планах</option></select></label><label>№ сообщения-основания (необязательно)<input name="messageIndex" type="number" min="0" max="999999" placeholder="Например, 1100"></label></div><small>Если укажешь сообщение-основание, при удалении/редактировании/смене свайпа запись автоматически скрывается. Ручные записи без источника не удаляются.</small><div class="ena-beta-form-actions"><button type="submit">Сохранить</button><button type="button" data-beta="cancel">Отмена</button></div></form></div>`;
   }
+  function proposalEditorHTML(){
+    if(!proposalEditor)return '';
+    const p=state().proposals.find(x=>x.id===proposalEditor.id);
+    if(!p||p.status!=='pending')return '';
+    const split=proposalEditor.mode==='split';
+    const scopeOptions=(selected)=>SCOPE_KEYS.map(x=>`<option value="${encode(x)}" ${x===selected?'selected':''}>${encode(SCOPE_OPTIONS[x])}</option>`).join('');
+    const factOptions=(selected)=>Object.entries(factLabels).map(([x,t])=>`<option value="${encode(x)}" ${x===selected?'selected':''}>${encode(t)}</option>`).join('');
+    const sources=(chosen='all')=>`<select name="${chosen==='all'?'evidence':'evidence2'}"><option value="all">Все указанные источники</option>${(p.sources||[]).map((x,i)=>`<option value="${i}">Только #${x.index}</option>`).join('')}</select>`;
+    const titlePart=(n,title,detail,scope,kind)=>`<fieldset class="ena-beta-fact-edit"><legend>Факт ${n}</legend><label>Категория<select name="scope${n}">${scopeOptions(scope)}</select></label><label>Тип факта<select name="factType${n}">${factOptions(kind)}</select></label><label>Название<input name="title${n}" required maxlength="160" value="${encode(title)}"></label><label>Факт, без интерпретаций<textarea name="detail${n}" rows="4" maxlength="1600" required>${encode(detail)}</textarea></label><label>Основание ${sources(n===1?'all':'second').replace('name="evidence"','name="source1"').replace('name="evidence2"','name="source2"')}</label></fieldset>`;
+    return `<div class="ena-editor-backdrop"><form class="ena-beta-editor ena-editor ena-beta-proposal-editor" data-beta-form="proposal" data-id="${encode(p.id)}" data-mode="${split?'split':'edit'}"><div class="ena-editor-head"><b>${split?'Разделить предложение':'Редактировать предложение'}</b><button type="button" data-beta="cancel-proposal">×</button></div><p>Редактирование меняет только предложение, не текст ролевого чата. При разделении два факта будут подтверждаться независимо.</p>${titlePart(1,p.title,p.detail,p.scope,p.factType||'objective')}${split?titlePart(2,'','',p.scope,p.factType||'objective'):''}<small>Источники: ${encode((p.sources||[]).map(x=>'#'+x.index).join(', '))}. Если подтверждения недостаточно, отклони запись и уточни сюжет.</small><div class="ena-beta-form-actions"><button type="submit">${split?'Создать 2 предложения':'Сохранить правки'}</button><button type="button" data-beta="cancel-proposal">Отмена</button></div></form></div>`;
+  }
   function syncView(){const b=state(),s=settings().enaSync,c=messages();const pending=b.proposals.filter(p=>p.status==='pending');const invalid=b.records.filter(r=>r.sources?.length&&!valid(r));
-    const cards=pending.map(x=>`<article class="ena-beta-proposal ${valid(x)?'':'ena-beta-invalid'}"><b>${encode(SCOPE_OPTIONS[x.scope]||x.scope)} • ${encode(x.title)}</b><p>${encode(x.detail)}</p>${x.quote?`<blockquote>${encode(x.quote)}</blockquote>`:''}<small>Источник: ${encode(x.sources?.map(z=>'#'+z.index).join(', ')||'—')} ${valid(x)?'✓ присутствует':'⚠ изменён или удалён'} · ${encode(x.confidence||'не оценена')}</small><div><button data-beta="approve" data-id="${encode(x.id)}" ${valid(x)?'':'disabled'}>Подтвердить</button><button data-beta="reject" data-id="${encode(x.id)}">Отклонить</button></div></article>`).join('');
+    const cards=pending.map(x=>`<article class="ena-beta-proposal ${valid(x)?'':'ena-beta-invalid'}"><b>${encode(SCOPE_OPTIONS[x.scope]||x.scope)} • ${encode(x.title)}</b><div class="ena-fact-badge">${encode(factLabels[x.factType||'objective'])}</div><p>${encode(x.detail)}</p>${x.quote?`<blockquote>${encode(x.quote)}</blockquote>`:''}<small>Источник: ${encode(x.sources?.map(z=>'#'+z.index).join(', ')||'—')} ${valid(x)?'✓ присутствует':'⚠ изменён или удалён'} · ${encode(x.confidence||'не оценена')}</small>
+    <details class="ena-beta-preview"><summary>Как изменится база после подтверждения?</summary><div><b>${encode(SCOPE_OPTIONS[x.scope]||x.scope)} → новая запись</b><p>${encode(x.title)}</p><p>${encode(x.detail)}</p><small>${encode(factLabels[x.factType||'objective'])}; ${x.sources?.map(z=>'#'+z.index).join(', ')||'—'}</small></div></details>
+    <div class="ena-beta-proposal-actions"><button data-beta="approve" data-id="${encode(x.id)}" ${valid(x)?'':'disabled'}>Подтвердить</button><button data-beta="edit-proposal" data-id="${encode(x.id)}">✎ Изменить</button><button data-beta="split-proposal" data-id="${encode(x.id)}">Разделить</button><button data-beta="reject" data-id="${encode(x.id)}">Отклонить</button></div></article>`).join('');
     const f=b.fullScan||{cursor:0,total:0,status:'idle',added:0,blocks:0};
     const progress=f.total?Math.min(100,Math.round((f.cursor||0)/f.total*100)):0;
     const work=fullScanRunning?`<button data-beta="scan-stop" type="button">■ Остановить после текущего блока</button>`:
        `<button data-beta="scan-all" type="button">Проверить весь чат (${c.length} сообщений)</button>${f.cursor>0&&f.cursor<f.total?'<button data-beta="scan-resume" type="button">▶ Продолжить полную проверку</button>':''}`;
     const progressBar=f.total?`<div class="ena-scan-progress" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"><span style="width:${progress}%"></span></div><p>Полный проход: ${f.cursor||0} / ${f.total||0} сообщений · ${progress}% · блоков ${f.blocks||0} · новых предложений ${f.added||0} · ${encode(f.status||'')}</p>`:'';
-    return `<div class="ena-content ena-scroll ena-beta-space"><div class="ena-beta-banner"><b>Источник ИИ: активное подключение SillyTavern</b><p>Вызов через generateRaw без изменения чата и без самостоятельного переключения API-профиля.</p><p>Обработано блоков: ${b.syncRuns||0}; сообщений в чате: ${c.length}; текущая позиция: ${b.syncCursor===null?'ещё не задана':b.syncCursor}.</p></div>
-      <div class="ena-beta-controls"><button data-beta="scan-last" ${extracting?'disabled':''}>Последние ${Number(s.interval||50)} сообщений</button><button data-beta="scan-new" ${extracting?'disabled':''}>Новые сообщения</button>${work}<button data-beta="export">Экспорт JSON</button><label class="ena-beta-file">Импорт JSON <input data-beta-input="import" type="file" accept="application/json,.json"></label></div>
-      <div class="ena-beta-notice">Полная проверка выполняется порциями по ${Number(s.interval)||50} сообщений через активную модель. Каждая порция — отдельный платный запрос; можно остановить и возобновить. Начало полной проверки не удаляет существующие предложения. Перед импортом рекомендуется экспортировать копию.</div>${progressBar}
-      <h3>Предложения (${pending.length})</h3>${cards||'<p>Нет предложений. ИИ не должен придумывать события, которых не было.</p>'}<h3>Основания после откатов (${invalid.length})</h3>${invalid.map(r=>`<p class="ena-beta-warning">⚠ ${encode(r.title)} — источник удалён или изменён, запись скрыта.</p>`).join('')||'<p>Осиротевших записей нет.</p>'}<h3>Журнал</h3><div class="ena-beta-log">${b.history.slice(0,40).map(x=>`<div><small>${encode(x.time?.slice(0,16).replace('T',' ')||'')}</small> ${encode(x.summary)}</div>`).join('')}</div></div>`;
+    return `<div class="ena-content ena-scroll ena-beta-space"><div class="ena-beta-banner"><b>Источник ИИ: ${encode(selectedProviderLabel())}</b><p>Выбранный профиль GM не переключает модель рассказчика. Результаты записываются только после твоего подтверждения.</p>${profileSelect()}<p>Обработано блоков: ${b.syncRuns||0}; сообщений в чате: ${c.length}; текущая позиция: ${b.syncCursor===null?'ещё не задана':b.syncCursor}.</p></div>
+      <div class="ena-beta-controls"><button data-beta="scan-last" ${extracting?'disabled':''}>Последние ${Number(s.interval||50)} сообщений</button><button data-beta="scan-new" ${extracting?'disabled':''}>Новые сообщения</button>${work}<button data-beta="export">Экспорт JSON</button><button type="button" data-beta="choose-import">⬆ Импорт JSON</button><input class="ena-beta-file-hidden" data-beta-input="import" type="file" accept="application/json,.json"></div>
+      <div class="ena-beta-notice">Полная проверка выполняется порциями по ${Number(s.interval)||50} сообщений через выбранный API-профиль. Каждая порция — отдельный платный запрос; можно остановить и возобновить. Начало полной проверки не удаляет существующие предложения. Перед импортом рекомендуется экспортировать копию.</div>${progressBar}
+      <h3>Предложения (${pending.length})</h3>${cards||'<p>Нет предложений. ИИ не должен придумывать события, которых не было.</p>'}<h3>Основания после откатов (${invalid.length})</h3>${invalid.map(r=>`<p class="ena-beta-warning">⚠ ${encode(r.title)} — источник удалён или изменён, запись скрыта.</p>`).join('')||'<p>Осиротевших записей нет.</p>'}<h3>Журнал</h3><div class="ena-beta-log">${b.history.slice(0,40).map(x=>`<div><small>${encode(x.time?.slice(0,16).replace('T',' ')||'')}</small> ${encode(x.summary)}</div>`).join('')}</div></div>${proposalEditorHTML()}`;
   }
   function mutateRecord(scope,fields,previous=null,sources=[]){const b=state();if(previous){Object.assign(previous,fields);previous.sources=sources.length?sources:previous.sources||[];queueHistory('Изменено вручную: '+previous.title);}else{b.records.push({id:key(),scope,created:dateTime(),manual:true,...fields,sources});queueHistory('Добавлено вручную: '+fields.title);}saveMeta();}
   function action(type,el){if(!el.closest('#ena-desktop-root'))return false;
@@ -120,6 +171,9 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     if(type==='scan-all'){void scanWholeChat(false);return true;}
     if(type==='scan-resume'){void scanWholeChat(true);return true;}
     if(type==='scan-stop'){fullScanStop=true;toast('Остановка после текущего запроса');return true;}
+    if(type==='choose-import'){const input=el.closest('.ena-window')?.querySelector('input[data-beta-input="import"]');if(!input){toast('Поле импорта недоступно');return true;}input.value='';input.click();return true;}
+    if(type==='edit-proposal'||type==='split-proposal'){const rec=state().proposals.find(x=>x.id===el.dataset.id);if(!rec||rec.status!=='pending')return true;proposalEditor={id:rec.id,mode:type==='split-proposal'?'split':'edit'};fillWindow('gm');return true;}
+    if(type==='cancel-proposal'){proposalEditor=null;fillWindow('gm');return true;}
     if(type==='go-sync'){ui.tab.gm='sync';fillWindow('gm');return true;}
     if(type==='new'){const app=el.closest('.ena-window')?.dataset.app;let scope=activeScope(app);if(!TABLES[scope])return true;editor={app,scope,id:null};fillWindow(app);return true;}
     if(type==='edit'){const r=state().records.find(x=>x.id===el.dataset.id);if(!r)return true;editor={app:r.scope.split(':')[0],scope:r.scope,id:r.id};fillWindow(editor.app);return true;}
@@ -127,7 +181,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     if(type==='delete'){const r=state().records.find(x=>x.id===el.dataset.id);if(!r)return true;if(!confirm('Удалить запись «'+r.title+'»? Это не меняет текст ролки.'))return true;r.deleted=true;queueHistory('Удалена запись: '+r.title);fillWindow(r.scope.split(':')[0]);return true;}
     if(type==='approve'||type==='reject'){const p=state().proposals.find(x=>x.id===el.dataset.id);if(!p)return true;if(type==='approve'&&!valid(p)){toast('Основание изменено: нельзя подтвердить');return true;}
       p.status=type==='reject'?'rejected':'approved';if(type==='approve'){
-        const fields={title:p.title,detail:p.detail,extra:p.extra||'',date:p.date||'',status:'active'};
+        const fields={title:p.title,detail:p.detail,extra:p.extra||'',date:p.date||'',status:'active',factType:p.factType||'objective'};
         if(p.scope.startsWith('archive:')){
           const cat=p.scope.split(':')[1];const a=meta().archive[cat];a.push({id:key(),title:p.title,detail:p.detail,year:p.year||'',progress:cat==='anomalies'?'found':({films:['seen','started','planned'],books:['read','started','planned'],music:['listened','started','planned']}[cat]||[]).includes(p.progress)?p.progress:'planned',ownership:p.owned?'personal':'unknown',source:p.sources?.map(x=>'#'+x.index).join(', '),autoSources:p.sources,standStatus:'unknown'});
         }else state().records.push({id:key(),scope:p.scope,...fields,amount:p.amount??'',currency:p.currency||'₤',sources:p.sources,manual:false,created:dateTime()});
@@ -136,7 +190,36 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     if(type==='notes-list'){editor={app:'notes',scope:'notes:notes',id:null};fillWindow('notes');return true;}
     return false;
   }
-  function submit(form,ev){if(form.dataset.betaForm!=='record')return false;ev.preventDefault();const fd=new FormData(form);const target=editor?.app,scope=editor?.scope;if(!scope)return true;
+  function submit(form,ev){
+    if(form.dataset.betaForm==='proposal'){
+      ev.preventDefault();const p=state().proposals.find(x=>x.id===form.dataset.id);
+      if(!p||p.status!=='pending'||!valid(p)){toast('Предложение или его источник больше недоступны');return true;}
+      const fd=new FormData(form),split=form.dataset.mode==='split';
+      const parts=[];
+      for(let n=1;n<=(split?2:1);n++){
+        const scope=String(fd.get('scope'+n)||''),kind=String(fd.get('factType'+n)||''),title=String(fd.get('title'+n)||'').trim().slice(0,160),detail=String(fd.get('detail'+n)||'').trim().slice(0,1600);
+        const sourceChoice=String(fd.get('source'+n)||'all');
+        const sources=sourceChoice==='all'?p.sources:([p.sources[Number(sourceChoice)]].filter(Boolean));
+        if(!SCOPE_KEYS.includes(scope)||!factLabels[kind]||!title||!detail||!sources?.length){toast('Заполни оба факта и выбери подходящие источники');return true;}
+        if(kind!=='objective'&&scope!=='gm:knowledge'){toast('Знания и подозрения NPC записываются только в GM → Знания NPC');return true;}
+        parts.push({scope,factType:kind,title,detail,sources:structuredClone(sources)});
+      }
+      if(split){
+        p.status='split';p.splitAt=dateTime();
+        for(const part of parts){
+          // Never preserve a quote from another message after the evidence was split.
+          const quote=part.sources.some(src=>messages().some(m=>messageKey(m)===src.key&&String(m.mes||'').includes(p.quote||'__quote-missing__')))?p.quote:'';
+          state().proposals.push({...p,...part,quote,id:key(),status:'pending',signature:digest([part.scope,part.factType,part.title,part.detail,...part.sources.map(x=>x.key)].join('|')),splitFrom:p.id,created:dateTime()});
+        }
+        queueHistory('Разделено на два факта: '+p.title);
+      }else{
+        const part=parts[0];if(!p.originalBeforeEdit)p.originalBeforeEdit={title:p.title,detail:p.detail,scope:p.scope,factType:p.factType||'objective',sources:p.sources};
+        Object.assign(p,part);if(p.quote&&!p.sources.some(src=>messages().some(m=>messageKey(m)===src.key&&String(m.mes||'').includes(p.quote))))p.quote='';p.signature=digest([p.scope,p.factType,p.title,p.detail,...p.sources.map(x=>x.key)].join('|'));
+        queueHistory('Исправлено предложение: '+p.title);
+      }
+      proposalEditor=null;saveMeta();fillWindow('gm');toast(split?'Созданы два независимых предложения':'Предложение изменено');return true;
+    }
+    if(form.dataset.betaForm!=='record')return false;ev.preventDefault();const fd=new FormData(form);const target=editor?.app,scope=editor?.scope;if(!scope)return true;
     const title=String(fd.get('title')||'').trim();if(!title)return true;
     const old=editor.id?state().records.find(x=>x.id===editor.id):null;
     const sourceIndex=String(fd.get('messageIndex')||'').trim();let sources=old?.sources||[];
@@ -144,7 +227,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     const fields={title:title.slice(0,180),detail:String(fd.get('detail')||'').slice(0,3000),extra:String(fd.get('extra')||'').slice(0,280),date:String(fd.get('date')||'').slice(0,80),status:String(fd.get('status')||'active'),amount:fd.has('amount')?String(fd.get('amount')||''):'',currency:String(fd.get('currency')||'₤').slice(0,12)};
     mutateRecord(scope,fields,old,sources);editor=null;fillWindow(target);toast('Запись сохранена');return true;
   }
-  function change(el,ev){if(el.dataset.betaSetting){const s=settings().enaSync;const name=el.dataset.betaSetting;s[name]=el.type==='checkbox'?el.checked:Number(el.value)||50;persistSettings();return true;}
+  function change(el,ev){if(el.dataset.betaSetting){const s=settings().enaSync;const name=el.dataset.betaSetting;s[name]=el.type==='checkbox'?el.checked:name==='profileId'?String(el.value):Number(el.value)||50;persistSettings();if(name==='profileId'){toast('Профиль GM: '+selectedProviderLabel());fillWindow('gm');}return true;}
     if(el.dataset.betaInput==='import'){const file=el.files?.[0];if(file)void importBackup(file);return true;}
     return false;
   }
@@ -182,27 +265,27 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
   // silently skips a failed chunk. Full-chat mode stores its own resumable cursor.
   async function scanChunk(start, limit, {updateCursor=true}={}){
     if(extracting)return null;
-    const c=ctx();if(typeof c?.generateRaw!=='function'){toast('Активная модель SillyTavern недоступна');return null;}
+    const c=ctx();if(!c){toast('SillyTavern недоступна');return null;}
     const bag=activeChatKey(),b=state(),chat=messages(),end=Math.min(chat.length,start+limit);
     const portion=chat.slice(start,end).map((x,i)=>({index:start+i,key:messageKey(x),speaker:x.is_user?'Ена/пользователь':'Рассказчик',text:(()=>{const m=String(x.mes||'');return m.length>5000?m.slice(0,2600)+'\n[... фрагмент длинного сообщения пропущен ...]\n'+m.slice(-2300):m;})()})).filter(x=>x.key&&x.text.trim());
     if(end<=start)return {next:end,added:0};
     if(!portion.length){if(updateCursor){b.syncCursor=Math.max(b.syncCursor??0,end);saveMeta();}return {next:end,added:0};}
-    extracting=true;toast('Проверяю сообщения '+(start+1)+'–'+end+' через текущее API');if(ui.windows.has('gm'))fillWindow('gm');
-    const system=`Ты строгий экстрактор СОБЫТИЙ для ролевой игры JoJo (Неаполь 2001), а не рассказчик. Верни ТОЛЬКО JSON: {"changes":[{"scope":"gm:inventory","title":"...","detail":"...","message_ids":["m0"],"quote":"точная короткая цитата из указанного сообщения","confidence":"high","progress":"planned","owned":false}]} .
-Доступные scope: ${SCOPE_KEYS.join(', ')}. События ТОЛЬКО прямо подтверждённые текстом: явно приобретённый предмет, просмотренный Еной фильм, полученное письмо или SMS, изменение баланса, конкретная травма, выполненное задание, открытое место или знание NPC. Простое УПОМИНАНИЕ произведения не означает просмотр. Для личных archive:films progress=seen ТОЛЬКО при реально подтверждённом просмотре; для books=read, для music=listened, иначе planned. Поле owned=true ТОЛЬКО если Ена купила копию ДЛЯ СЕБЯ. Покупка лицензии для видеосалона НЕ добавляет фильм в личный архив. Личные мысли Ены не придумывать. Никогда не переносить в личные записи Ены сведения, известные только GM. Не создавать эфирных богов, меметическое заражение, опасность просмотра VHS без подтверждения. Для каждого изменения используй 1-2 ID реально подтверждающих сообщений и цитату ДОСЛОВНО из одного из них. Для поиска МЕНЬШЕ значит ЛУЧШЕ. Если фактов нет, changes:[] . Никакого текста вне JSON.`;
+    extracting=true;toast('Проверяю сообщения '+(start+1)+'–'+end+' · '+selectedProviderLabel());if(ui.windows.has('gm'))fillWindow('gm');
+    const system=`Ты строгий экстрактор СОБЫТИЙ для ролевой игры JoJo (Неаполь 2001), а не рассказчик. Верни ТОЛЬКО JSON: {"changes":[{"scope":"gm:inventory","factType":"objective","title":"...","detail":"...","message_ids":["m0"],"quote":"точная короткая цитата из указанного сообщения","confidence":"high","progress":"planned","owned":false}]} .
+Доступные scope: ${SCOPE_KEYS.join(', ')}. События ТОЛЬКО прямо подтверждённые текстом: явно приобретённый предмет, просмотренный Еной фильм, полученное письмо или SMS, изменение баланса, конкретная травма, выполненное задание, открытое место или знание NPC. Простое УПОМИНАНИЕ произведения не означает просмотр. Для личных archive:films progress=seen ТОЛЬКО при реально подтверждённом просмотре; для books=read, для music=listened, иначе planned. Поле owned=true ТОЛЬКО если Ена купила копию ДЛЯ СЕБЯ. Покупка лицензии для видеосалона НЕ добавляет фильм в личный архив. Личные мысли Ены не придумывать. Никогда не переносить в личные записи Ены сведения, известные только GM. Не создавать эфирных богов, меметическое заражение, опасность просмотра VHS без подтверждения. ОДИН факт = ОДНА запись. Никогда не объединяй уборку, передачу ключа и назначенную встречу в один факт. Для подозрения NPC используй scope=gm:knowledge и factType=npc_suspicion, подчеркни, что это субъективное подозрение, не истина; для реально полученного знания NPC scope=gm:knowledge, factType=npc_knowledge. Для объективного события factType=objective. Не делай выводов о будущих реакциях персонажей из внешних следов. Для каждого изменения используй 1-2 ID реально подтверждающих сообщений и цитату ДОСЛОВНО из одного из них. Для поиска МЕНЬШЕ значит ЛУЧШЕ. Если фактов нет, changes:[] . Никакого текста вне JSON.`;
     const payload=portion.map((x,i)=>({id:'m'+i,index:x.index,key:x.key,speaker:x.speaker,text:x.text}));
     try{
-      const result=await c.generateRaw({systemPrompt:system,prompt:'Извлеки только факты из сообщений:\n'+JSON.stringify(payload)});
+      const result=await requestAI(system,'Извлеки только факты из сообщений:\n'+JSON.stringify(payload));
       if(bag!==activeChatKey()){toast('Чат изменился: проверка остановлена');return null;}
       const changes=parseExtraction(result);const seenKeys=new Set([...b.proposals.map(x=>x.signature)]);let added=0;
       for(const change of changes){if(!SCOPE_KEYS.includes(change.scope))continue;const ids=Array.isArray(change.message_ids)?change.message_ids:[];
         const sources=ids.map(id=>payload[Number(String(id).replace(/^m/,''))]).filter(Boolean);
         if(!sources.length||sources.length>3)continue;
         const quote=String(change.quote||'').trim();if(quote&&!sources.some(x=>x.text.includes(quote)))continue;
-        const title=String(change.title||'').trim().slice(0,160),detail=String(change.detail||'').trim().slice(0,1600);if(!title)continue;
-        const signature=digest([change.scope,title,detail,...sources.map(x=>x.key)].join('|'));if(seenKeys.has(signature))continue;
+        const title=String(change.title||'').trim().slice(0,160),detail=String(change.detail||'').trim().slice(0,1600),factType=factLabels[change.factType]?change.factType:'objective';if(!title||!detail)continue;if(factType!=='objective'&&change.scope!=='gm:knowledge')continue;
+        const signature=digest([change.scope,factType,title,detail,...sources.map(x=>x.key)].join('|'));if(seenKeys.has(signature))continue;
         const evidence=sources.map(x=>({index:x.index,key:x.key}));
-        b.proposals.push({id:key(),signature,status:'pending',scope:change.scope,title,detail,extra:String(change.extra||'').slice(0,200),date:String(change.date||'').slice(0,70),year:String(change.year||'').slice(0,40),progress:String(change.progress||'').slice(0,40),owned:change.owned===true,quote,confidence:String(change.confidence||'').slice(0,30),sources:evidence,created:dateTime()});seenKeys.add(signature);added++;
+        b.proposals.push({id:key(),signature,status:'pending',scope:change.scope,factType,title,detail,extra:String(change.extra||'').slice(0,200),date:String(change.date||'').slice(0,70),year:String(change.year||'').slice(0,40),progress:String(change.progress||'').slice(0,40),owned:change.owned===true,quote,confidence:String(change.confidence||'').slice(0,30),sources:evidence,created:dateTime()});seenKeys.add(signature);added++;
       }
       if(updateCursor)b.syncCursor=Math.max(b.syncCursor??0,end);
       b.syncRuns=(b.syncRuns||0)+1;
@@ -224,7 +307,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     if(!chat.length){toast('Чат пуст');return;}
     const saved=b.fullScan||{},canResume=resume&&saved.cursor>0&&saved.cursor<saved.total;
     const start=canResume?saved.cursor:0,total=canResume?Math.min(saved.total,chat.length):chat.length;
-    if(!canResume){const chunks=Math.ceil(total/interval);if(!confirm(`Проверить ${total} сообщений порциями по ${interval}? Это до ${chunks} запросов к активной модели и может расходовать платные токены. Результаты будут предложениями, не автоматическими фактами.`))return;}
+    if(!canResume){const chunks=Math.ceil(total/interval);if(!confirm(`Проверить ${total} сообщений порциями по ${interval}? Это до ${chunks} запросов через «${selectedProviderLabel()}» и может расходовать платные токены. Результаты будут предложениями, не автоматическими фактами.`))return;}
     if(!canResume)b.fullScan={cursor:0,total,status:'running',added:0,blocks:0};
     else b.fullScan.status='running';
     fullScanStop=false;fullScanRunning=true;const bag=activeChatKey();saveMeta();
@@ -255,7 +338,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
   function initialize(){const c=ctx();state();if(!c?.eventSource?.on)return;
     const ev=c.event_types||{};
     for(const event of ['MESSAGE_DELETED','MESSAGE_EDITED','MESSAGE_SWIPED','MESSAGE_UPDATED','CHAT_CHANGED','MESSAGE_RECEIVED'])if(ev[event])c.eventSource.on(ev[event],()=>{
-      if(event==='CHAT_CHANGED'){editor=null;filter='';lastChatRef=null;}
+      if(event==='CHAT_CHANGED'){editor=null;proposalEditor=null;filter='';lastChatRef=null;}
       updateEvents();
     });
     if(ev.GENERATION_ENDED)c.eventSource.on(ev.GENERATION_ENDED,()=>updateEvents());

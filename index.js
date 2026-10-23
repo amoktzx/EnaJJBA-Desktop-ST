@@ -3,7 +3,7 @@ import { createBeta } from './beta.js';
    No generation, context injection, Memory Books or chat edits in v0.1. */
 const ENA = (() => {
   'use strict';
-  const VERSION = '1.0.0-beta.2';
+  const VERSION = '1.0.0-beta.3';
   const META_KEY = 'ena_desktop_v1';
   const SETTING_KEY = 'ena_desktop_2001';
   const ROOT = new URL('./', import.meta.url);
