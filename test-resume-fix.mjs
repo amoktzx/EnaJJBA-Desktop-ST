@@ -20,7 +20,7 @@ async function until(fn,timeout=13000){const started=Date.now();while(!fn()){if(
 
 // Persistent failure: first API fails, resume same chunk, then carries on without reset.
 {
- const h=makeHarness(65,({requests})=>{if(requests===1)throw new Error('429 rate limit temporary');return JSON.stringify({changes:[]});});
+ const h=makeHarness(65,({requests,prompt})=>{if(requests===1)throw new Error('429 rate limit temporary');const n=prompt.match(/Ена нашла предмет номер (\d+)/)?.[1];return JSON.stringify({changes:[{scope:'gm:inventory',factType:'objective',title:'Ена нашла предмет',detail:'Предмет теперь у Ены',message_ids:['m0'],quote:'Ена нашла предмет номер '+n,confidence:'high'}]});});
  h.click('scan-all');
  await until(()=>h.b.state().fullScan.status==='paused');
  assert.equal(h.b.state().fullScan.cursor,0);
@@ -39,7 +39,7 @@ async function until(fn,timeout=13000){const started=Date.now();while(!fn()){if(
  const h=makeHarness(60,({prompt})=>{
    const batch=(prompt.match(/"id":"m\d+"/g)||[]).length;
    if(batch>25)return 'sorry no json';
-   return JSON.stringify({changes:[]});
+   const n=prompt.match(/Ена нашла предмет номер (\d+)/)?.[1];return JSON.stringify({changes:[{scope:'gm:inventory',factType:'objective',title:'Найден предмет',detail:'Предмет '+n+' в сумке',message_ids:['m0'],quote:'Ена нашла предмет номер '+n,confidence:'high'}]});
  });
  h.click('scan-all');
  await until(()=>h.b.state().fullScan.status==='complete');

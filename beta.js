@@ -73,6 +73,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
       b.linksMigrated=true;saveMeta();
     }
     if(!b.fullScan||typeof b.fullScan!=='object')b.fullScan={cursor:0,total:0,status:'idle',added:0,blocks:0};
+    if(!b.scanDiagnostics||typeof b.scanDiagnostics!=='object')b.scanDiagnostics={status:'idle'};
     if(!b.migrated){
       // Copy old manual v0.1/v0.2 records WITHOUT deleting their originals, for reversible migration.
       const map=[['salon','licenses','salon:licenses'],['salon','tasks','salon:tasks'],['salon','documents','salon:documents'],['salon','transactions','salon:finance'],['directory','people','directory:people'],['directory','places','directory:places'],['gm','injuries','gm:body'],['gm','items','gm:inventory'],['gm','quests','gm:quests']];
@@ -176,9 +177,11 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
        `<button data-beta="scan-all" type="button">Проверить весь чат (${c.length} сообщений)</button>${f.cursor>0&&f.cursor<f.total?'<button data-beta="scan-resume" type="button">▶ Продолжить полную проверку</button>':''}`;
     const reason=f.lastError?`<div class="ena-beta-warning ena-fullscan-error" role="alert"><b>Почему проверка остановилась:</b> ${encode(f.lastError)}<br><small>Блок с позиции #${Number(f.failedStart??f.cursor)+1}. Завершённые блоки сохранены. ${f.chunkSize?`Размер следующей порции: ${f.chunkSize} сообщений.`:''} Если причина связана с API/лимитом, не нажимай «Продолжить» многократно.</small></div>`:'';
     const progressBar=f.total?`<div class="ena-scan-progress" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"><span style="width:${progress}%"></span></div><p>Полный проход: ${f.cursor||0} / ${f.total||0} сообщений · ${progress}% · блоков ${f.blocks||0} · новых предложений ${f.added||0} · ${encode(f.status||'')} · размер порции: ${Number(f.chunkSize)||Number(s.interval)||50}</p>${reason}`:'';
+    const dg=b.scanDiagnostics||{},discardText=Object.entries(dg.discarded||{}).map(([k,v])=>`${encode(k)}: ${Number(v)}`).join(' · ');
+    const diagnostics=`<section class="ena-beta-warning" style="margin-top:10px;padding:10px"><b>Диагностика извлечения • без сохранения новых фактов</b><p>Один тест = один API-запрос, ориентировочно 8–10 сообщений. Текущая позиция полной проверки не меняется.</p><button type="button" data-beta="scan-diagnose-early" ${fullScanRunning||extracting?'disabled':''}>Проверить сообщения 1–10</button> <button type="button" data-beta="scan-diagnose-current" ${fullScanRunning||extracting?'disabled':''}>Проверить у позиции ${Number(f.cursor||0)+1}</button>${dg.status==='idle'?'':`<p><b>${encode(dg.status||'')}</b> • сообщения ${Number(dg.start??0)+1}–${Number(dg.end??0)} • модель предложила: ${Number(dg.extracted)||0}, прошло проверку: ${Number(dg.acceptable)||0}, создано: ${Number(dg.added)||0}</p><p>${discardText||'Ошибок проверки нет'}</p>${dg.error?`<p>Ошибка: ${encode(dg.error)}</p>`:''}${dg.status==='empty'?'<p>Модель вернула {"changes":[]}; это не ошибка JSON, но отсутствие событий пока не подтверждено.</p>':''}`}</section>`;
     return `<div class="ena-content ena-scroll ena-beta-space"><div class="ena-beta-banner"><b>Источник ИИ: ${encode(selectedProviderLabel())}</b><p>Выбранный профиль GM не переключает модель рассказчика. Результаты записываются только после твоего подтверждения.</p>${profileSelect()}<p>Обработано блоков: ${b.syncRuns||0}; сообщений в чате: ${c.length}; текущая позиция: ${b.syncCursor===null?'ещё не задана':b.syncCursor}.</p></div>
       <div class="ena-beta-controls"><button data-beta="scan-last" ${extracting?'disabled':''}>Последние ${Number(s.interval||50)} сообщений</button><button data-beta="scan-new" ${extracting?'disabled':''}>Новые сообщения</button>${work}<button data-beta="export">⬇ Полный экспорт JSON</button><button type="button" data-beta="choose-import">⬆ Импорт JSON</button><input class="ena-beta-file-hidden" data-beta-input="import" type="file" accept="application/json,.json"></div>
-      <div class="ena-beta-notice">Полная проверка выполняется порциями по ${Number(s.interval)||50} сообщений через выбранный API-профиль. Каждая порция — отдельный платный запрос; можно остановить и возобновить. Принятые, на рассмотрении и отклонённые предложения блокируют повторное появление по тому же источнику и цитате. Удалённые — не блокируют. Импорт/экспорт включает ВСЮ базу со статусами и историей.</div>${progressBar}
+      <div class="ena-beta-notice">Полная проверка выполняется порциями по ${Number(s.interval)||50} сообщений через выбранный API-профиль. Каждая порция — отдельный платный запрос; можно остановить и возобновить. Принятые, на рассмотрении и отклонённые предложения блокируют повторное появление по тому же источнику и цитате. Удалённые — не блокируют. Импорт/экспорт включает ВСЮ базу со статусами и историей.</div>${progressBar}${diagnostics}
       <div class="ena-fact-status-tabs">${[['pending','На рассмотрении'],['approved','Принятые'],['rejected','Отклонённые'],['deleted','Удалённые']].map(([k,v])=>`<button type="button" data-beta="fact-tab" data-value="${k}" class="${factTab===k?'ena-fact-status-active':''}">${v} (${counts[k]})</button>`).join('')}</div><h3>Факты: ${counts[factTab]||0}</h3>${cards||'<p>В этой категории пока нет записей.</p>'}<h3>Основания после откатов (${invalid.length})</h3>${invalid.map(r=>`<p class="ena-beta-warning">⚠ ${encode(r.title)} — источник удалён или изменён, запись скрыта.</p>`).join('')||'<p>Осиротевших записей нет.</p>'}<h3>Журнал</h3><div class="ena-beta-log">${b.history.slice(0,40).map(x=>`<div><small>${encode(x.time?.slice(0,16).replace('T',' ')||'')}</small> ${encode(x.summary)}</div>`).join('')}</div></div>${proposalEditorHTML()}`;
   }
   function removeLinkedFact(p){
@@ -195,6 +198,11 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     if(type==='scan-all'){void scanWholeChat(false);return true;}
     if(type==='scan-resume'){void scanWholeChat(true);return true;}
     if(type==='scan-stop'){fullScanStop=true;toast('Остановка после текущего запроса');return true;}
+    if(type==='scan-diagnose-early'||type==='scan-diagnose-current'){
+      if(fullScanRunning||extracting){toast('Дождись окончания текущего запроса');return true;}
+      const b=state(),start=type==='scan-diagnose-early'?0:Math.min(b.fullScan?.cursor||0,Math.max(0,messages().length-1));
+      void scanChunk(start,10,{updateCursor:false,dryRun:true});return true;
+    }
     if(type==='choose-import'){const input=el.closest('.ena-window')?.querySelector('input[data-beta-input="import"]');if(!input){toast('Поле импорта недоступно');return true;}input.value='';input.click();return true;}
     if(type==='edit-proposal'||type==='split-proposal'){const rec=state().proposals.find(x=>x.id===el.dataset.id);if(!rec||rec.status!=='pending')return true;proposalEditor={id:rec.id,mode:type==='split-proposal'?'split':'edit'};fillWindow('gm');return true;}
     if(type==='cancel-proposal'){proposalEditor=null;fillWindow('gm');return true;}
@@ -358,15 +366,46 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
   function canRetrySmaller(reason){
     return /(?:JSON|Unexpected (?:token|end)|SyntaxError|context|контекст|token limit|too many tokens|maximum.*token|request too large|413|length exceeded|нет массива changes|не вернула JSON)/i.test(String(reason||''));
   }
+  function assessChanges(changes,payload,existing){
+    const skipped={}, candidates=[];
+    const skip=reason=>{skipped[reason]=(skipped[reason]||0)+1;};
+    for(const change of changes){
+      if(!change||typeof change!=='object'){skip('не объект');continue;}
+      if(!SCOPE_KEYS.includes(change.scope)){skip('категория вне списка');continue;}
+      const ids=Array.isArray(change.message_ids)?change.message_ids:[];
+      if(!ids.length||ids.length>3||ids.some(id=>typeof id!=='string'||!/^m\d+$/.test(id))){skip('неверные message_ids');continue;}
+      const sources=ids.map(id=>payload[Number(id.slice(1))]).filter(Boolean);
+      if(sources.length!==ids.length||new Set(sources.map(x=>x.key)).size!==sources.length){skip('источник отсутствует в блоке');continue;}
+      const quote=String(change.quote||'').trim();
+      if(!quote){skip('нет цитаты');continue;}
+      if(!sources.some(x=>x.text.includes(quote))){skip('цитата не найдена');continue;}
+      const title=String(change.title||'').trim().slice(0,160),detail=String(change.detail||'').trim().slice(0,1600);
+      const factType=factLabels[change.factType]?change.factType:'objective';
+      if(!title||!detail){skip('нет заголовка/описания');continue;}
+      if(factType!=='objective'&&change.scope!=='gm:knowledge'){skip('знания NPC не в GM');continue;}
+      const signature=digest([change.scope,factType,title,detail,...sources.map(x=>x.key)].join('|'));
+      const evidence=sources.map(x=>({index:x.index,key:x.key}));
+      const candidate={signature,scope:change.scope,factType,title,detail,quote,sources:evidence};
+      if(!canPropose(candidate,existing)){skip('дубликат существующего факта');continue;}
+      candidates.push({signature,scope:change.scope,factType,title,detail,quote,sources:evidence,
+        extra:String(change.extra||'').slice(0,200),date:String(change.date||'').slice(0,70),year:String(change.year||'').slice(0,40),
+        progress:String(change.progress||'').slice(0,40),owned:change.owned===true,confidence:String(change.confidence||'').slice(0,30)});
+    }
+    return {candidates,skipped};
+  }
   // A single sequential chunk. Returns null on failure / chat switch, and never
   // silently skips a failed chunk. Full-chat mode stores its own resumable cursor.
-    async function scanChunk(start, limit, {updateCursor=true}={}){ 
+    async function scanChunk(start, limit, {updateCursor=true,dryRun=false}={}){ 
     if(extracting)return null;
     const c=ctx();if(!c){toast('SillyTavern недоступна');return null;}
     const bag=activeChatKey(),b=state(),chat=messages(),end=Math.min(chat.length,start+limit);
     const portion=chat.slice(start,end).map((x,i)=>({index:start+i,key:messageKey(x),speaker:x.is_user?'Ена/пользователь':'Рассказчик',text:(()=>{const m=String(x.mes||'');return m.length>5000?m.slice(0,2600)+'\n[... фрагмент длинного сообщения пропущен ...]\n'+m.slice(-2300):m;})()})).filter(x=>x.key&&x.text.trim());
     if(end<=start)return {next:end,added:0};
-    if(!portion.length){if(updateCursor){b.syncCursor=Math.max(b.syncCursor??0,end);saveMeta();}return {next:end,added:0};}
+    if(!portion.length){
+      if(dryRun){b.scanDiagnostics={status:'no-message',start,end,extracted:0,acceptable:0,added:0,discarded:{}};saveMeta();}
+      else if(updateCursor){b.syncCursor=Math.max(b.syncCursor??0,end);saveMeta();}
+      return {next:end,added:0};
+    }
     extracting=true;toast('Проверяю сообщения '+(start+1)+'–'+end+' · '+selectedProviderLabel());if(ui.windows.has('gm'))fillWindow('gm');
     const system=`Ты — ENA DESKTOP GM EXTRACTOR, строгий архивариус реально сыгранной ролевой истории JoJo: Golden Wind, Неаполь 2001. Ты НЕ рассказчик: не продолжай историю, не дописывай сцены, не придумывай сюжет. Получишь массив сообщений с id m0, m1... и text. Источником являются ТОЛЬКО эти сообщения. Верни ТОЛЬКО валидный JSON-объект: {"changes":[{"scope":"gm:events","factType":"objective","title":"Краткое название","detail":"Проверенное изменение состояния","message_ids":["m0"],"quote":"дословная короткая цитата из сообщения m0","confidence":"high","progress":"completed","owned":false}]}. Если изменений нет — {"changes":[]}. Никакого Markdown, кодовых блоков, комментариев и текста за пределами объекта.
 Разрешённые scope: ${SCOPE_KEYS.join(', ')}. factType: objective, npc_knowledge, npc_suspicion. Для npc_knowledge и npc_suspicion scope всегда gm:knowledge. Каждый факт имеет собственную запись: НЕ объединяй разные события, но НЕ дублируй одно и то же событие. Сохраняй устойчивые сюжетные изменения: предметы и владение, реальные деньги/документы/дела видеосалона, точные внешние раны и следы, сообщения, задачи и их исполнение, реальные отношения и доступные NPC знания/подозрения, подтверждённый личный просмотр фильмов/чтение/прослушивание, новые места и контакты. Не засоряй базу проходными репликами.
@@ -382,26 +421,37 @@ progress выбирай по тексту: planned для планов; in_progr
         if(fullScanRunning){b.fullScan.lastError='Изменился идентификатор активного чата во время ответа модели';b.fullScan.failedStart=start;saveMeta();}
         toast('Чат изменился: проверка остановлена');return null;
       }
-      const changes=parseExtraction(result);let added=0;
-      for(const change of changes){if(!SCOPE_KEYS.includes(change.scope))continue;const ids=Array.isArray(change.message_ids)?change.message_ids:[];
-        const sources=ids.map(id=>payload[Number(String(id).replace(/^m/,''))]).filter(Boolean);
-        if(!sources.length||sources.length>3)continue;
-        const quote=String(change.quote||'').trim();if(quote&&!sources.some(x=>x.text.includes(quote)))continue;
-        const title=String(change.title||'').trim().slice(0,160),detail=String(change.detail||'').trim().slice(0,1600),factType=factLabels[change.factType]?change.factType:'objective';if(!title||!detail)continue;if(factType!=='objective'&&change.scope!=='gm:knowledge')continue;
-        const signature=digest([change.scope,factType,title,detail,...sources.map(x=>x.key)].join('|'));
-        const evidence=sources.map(x=>({index:x.index,key:x.key}));
-        const candidate={signature,scope:change.scope,factType,title,detail,quote,sources:evidence};
-        if(!canPropose(candidate,b.proposals))continue;
-        b.proposals.push({id:key(),signature,status:'pending',scope:change.scope,factType,title,detail,extra:String(change.extra||'').slice(0,200),date:String(change.date||'').slice(0,70),year:String(change.year||'').slice(0,40),progress:String(change.progress||'').slice(0,40),owned:change.owned===true,quote,confidence:String(change.confidence||'').slice(0,30),sources:evidence,created:dateTime()});added++;
+      const changes=parseExtraction(result);
+      const assessment=assessChanges(changes,payload,b.proposals);
+      const {candidates,skipped}=assessment;
+      const diagnostic={status:changes.length===0?'empty':candidates.length?'ok':'filtered',start,end,
+        extracted:changes.length,acceptable:candidates.length,added:dryRun?0:candidates.length,discarded:skipped};
+      b.scanDiagnostics=diagnostic;
+      // A valid JSON with several rejected entries is NOT a successful extraction.
+      // Preserve the cursor until the user can inspect why every candidate was dropped.
+      const rejectionCount=Object.entries(skipped).filter(([reason])=>reason!=='дубликат существующего факта').reduce((n,[,v])=>n+v,0);
+      if(!dryRun&&fullScanRunning&&changes.length>0&&candidates.length===0&&rejectionCount>0){
+        throw Error('Модель вернула '+changes.length+' фактов, но все отброшены проверкой. '+Object.entries(skipped).map(([k,v])=>k+': '+v).join('; '));
       }
+      if(dryRun){saveMeta();toast('Диагностика: модель предложила '+changes.length+', прошло проверку '+candidates.length);return {next:end,added:0};}
+      // Persistent zero on long RP data is suspicious: stop, do not mark another block as checked.
+      if(fullScanRunning&&changes.length===0){
+        const nextEmpty=(Number(b.fullScan.emptyStreak)||0)+1;
+        if(nextEmpty>=2)throw Error('Модель вернула пустой changes уже в двух последовательных блоках; остановлено для диагностики');
+        b.fullScan.emptyStreak=nextEmpty;
+      }else if(fullScanRunning)b.fullScan.emptyStreak=0;
+      for(const candidate of candidates)b.proposals.push({id:key(),status:'pending',...candidate,created:dateTime()});
+      const added=candidates.length;
       if(updateCursor)b.syncCursor=Math.max(b.syncCursor??0,end);
       b.syncRuns=(b.syncRuns||0)+1;
       if(fullScanRunning){b.fullScan.lastError='';b.fullScan.failedStart=null;}
-      queueHistory(`Проверены сообщения ${start}–${end-1}, предложено ${added} изменений`);
+      queueHistory(`Проверены сообщения ${start}–${end-1}: модель ${changes.length}, прошло проверку ${candidates.length}, новых ${added}; отклонено: ${JSON.stringify(skipped)}`);
       return {next:end,added};
     }catch(e){
       const explanation=describeError(e);
       console.error('[EnaDesktop] AI sync error',e);
+      b.scanDiagnostics={...(b.scanDiagnostics||{}),status:'failed',start,end,error:explanation};
+      saveMeta();
       if(fullScanRunning){b.fullScan.lastError=explanation;b.fullScan.failedStart=start;saveMeta();}
       toast('Ошибка ИИ: '+explanation.slice(0,180));return null;
     }
@@ -421,7 +471,7 @@ progress выбирай по тексту: planned для планов; in_progr
     const saved=b.fullScan||{},canResume=resume&&saved.cursor>0&&saved.cursor<saved.total;
     const start=canResume?saved.cursor:0,total=canResume?Math.min(saved.total,chat.length):chat.length;
     if(!canResume){const chunks=Math.ceil(total/interval);if(!confirm(`Проверить ${total} сообщений порциями по ${interval}? Это до ${chunks} запросов через «${selectedProviderLabel()}» и может расходовать платные токены. Результаты будут предложениями, не автоматическими фактами.`))return;}
-    if(!canResume)b.fullScan={cursor:0,total,status:'running',added:0,blocks:0,chunkSize:interval,lastError:'',failedStart:null};
+    if(!canResume)b.fullScan={cursor:0,total,status:'running',added:0,blocks:0,chunkSize:interval,lastError:'',failedStart:null,emptyStreak:0};
     else b.fullScan.status='running';
     fullScanStop=false;fullScanRunning=true;const bag=activeChatKey();saveMeta();
     try{

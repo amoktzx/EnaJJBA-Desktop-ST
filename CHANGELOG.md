@@ -1,3 +1,8 @@
+## v1.0.0-beta.5.2 — GM extraction diagnostics
+- Per-batch raw/extracted/filtered counts and reason categories; safe dry run without cursor advance.
+- Guard against silently marking failed/empty extraction as successful.
+- No narrator profile, world info, rollback, or existing records changed.
+
 # Ena Desktop 2001 — v1.0.0-beta.4
 
 ## Полный журнал фактов (GM)
