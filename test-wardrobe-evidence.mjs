@@ -28,11 +28,12 @@ const beta=createBeta({meta:()=>meta,ctx:()=>ctx,settings:()=>settings,persistSe
 beta.action('scan-diagnose-early',{dataset:{},closest:()=>({})});
 const deadline=Date.now()+4000;while(!meta.beta.scanDiagnostics.preview&&Date.now()<deadline)await new Promise(r=>setTimeout(r,15));
 assert.equal(meta.beta.scanDiagnostics.extracted,3);
-assert.equal(meta.beta.scanDiagnostics.acceptable,2);
+assert.equal(meta.beta.scanDiagnostics.acceptable,1);
 assert.equal(meta.beta.scanDiagnostics.discarded['цитата не подтверждена (включая сокращённые фрагменты)'],1);
+assert.equal(meta.beta.scanDiagnostics.discarded['внешность берётся один раз из World Info, не из сцен'],1);
 assert.equal(meta.beta.scanDiagnostics.preview[0].evidenceMode,'fragments');
-assert.match(prompt,/Авторское описание рассказчика/);
-assert.match(prompt,/НЕ устанавливай лимит|Не устанавливай лимит/);
+assert.match(prompt,/Авторское объективное описание/);
+assert.match(prompt,/Числовой лимит для числа фактов не задан/);
 assert.match(prompt,/gm:wardrobe/);
 assert.equal(meta.beta.proposals.length,0);
 assert.equal(meta.beta.fullScan.cursor,0);

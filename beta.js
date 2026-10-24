@@ -4,6 +4,8 @@ import {identityKeys,canPropose,exportFullSnapshot,validateFullSnapshot,countsFo
 import {projectStates,isStateScope,canonicalEntityKey,entityKeyOf,existingEntityOptions,STATE_LABELS,ENTITY_ACTIONS} from './entityState.js';
 import {matchSourceQuote} from './quoteEvidence.js';
 import {groupDossiers,referenceAction,referenceScope,dossierAttribute} from './dossierIndex.js';
+import {physicalAttribute,lifetime,compactExisting} from './registryLogic.js';
+import {parseLorebookProfiles,firstEncounter} from './lorebookProfiles.js';
 
 const TABLES={
  'salon:licenses':['Лицензии','Название / произведение','Формат, права, срок или примечание'],
@@ -74,7 +76,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     const m=meta();
     if(!m.beta||typeof m.beta!=='object')m.beta={schema:1,records:[],proposals:[],history:[],syncCursor:null,syncRuns:0};
     const b=m.beta;
-    for(const k of ['records','proposals','history'])if(!Array.isArray(b[k]))b[k]=[];
+    for(const k of ['records','proposals','history','lorebookProfiles','lorebookSeen'])if(!Array.isArray(b[k]))b[k]=[];
     if(!b.schema)b.schema=1;
     if(b.schema<2)b.schema=2;
     if(!b.linksMigrated){
@@ -145,7 +147,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
   const records=scope=>state().records.filter(r=>r.scope===scope&&!r.deleted&&valid(r));
   const states=scope=>projectStates(state().proposals,valid).filter(e=>!scope||e.scope===scope);
   const allActive=()=>state().records.filter(r=>!r.deleted&&valid(r));
-  function recordCard(r){return `<article class="ena-beta-record" data-record="${encode(r.id)}"><div class="ena-beta-record-main"><b>${encode(r.title)}</b><small>${encode(r.attribute||r.date||r.created?.slice(0,10)||'')}</small></div><div class="ena-beta-record-detail">${encode(r.detail||'')}</div><div class="ena-beta-record-meta">${r.extra?`<span>${encode(r.extra)}</span>`:''}${r.amount!==undefined&&r.amount!==''?`<span>${encode(r.amount)} ${encode(r.currency||'₤')}</span>`:''}${r.status==='done'?'<span>✓ Завершено</span>':''}${r.factType?`<span>${encode(factLabels[r.factType]||r.factType)}</span>`:''}${r.sources?.length?'<span title="Проверяется по сообщению чата">◉ Источник в чате</span>':'<span>✎ Ручная запись</span>'}<button data-beta="edit" data-id="${encode(r.id)}" type="button">Изменить</button><button data-beta="delete" data-id="${encode(r.id)}" type="button">Удалить</button></div></article>`;}
+  function recordCard(r){return `<article class="ena-beta-record" data-record="${encode(r.id)}"><div class="ena-beta-record-main"><b>${encode(r.title)}</b><small>${encode(r.attribute||r.date||r.created?.slice(0,10)||'')}</small></div><div class="ena-beta-record-detail">${encode(r.detail||'')}</div><div class="ena-beta-record-meta">${r.extra?`<span>${encode(r.extra)}</span>`:''}${r.amount!==undefined&&r.amount!==''?`<span>${encode(r.amount)} ${encode(r.currency||'₤')}</span>`:''}${r.status==='done'?'<span>✓ Завершено</span>':''}${r.factType?`<span>${encode(factLabels[r.factType]||r.factType)}</span>`:''}${r.sourceType==='lorebook'?'<span>◉ World Info (импорт)</span>':r.sources?.length?'<span title="Проверяется по сообщению чата">◉ Источник в чате</span>':'<span>✎ Ручная запись</span>'}<button data-beta="edit" data-id="${encode(r.id)}" type="button">Изменить</button><button data-beta="delete" data-id="${encode(r.id)}" type="button">Удалить</button></div></article>`;}
   function groupedReferenceRows(rows,scope){
     if(scope!=='gm:profiles')return rows.map(recordCard).join('');
     const groups=groupDossiers(rows);
@@ -167,7 +169,13 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     return `<div class="ena-beta-records">${derivedHtml}${groupedReferenceRows(rows,scope)}</div>`;
   }
   function heading(title){return `<div class="ena-toolbar"><b>${encode(title)}</b><small>Ena Desktop • 2001</small></div>`;}
-  function tabs(app){return `<div class="ena-tabs">${appTabs[app].map(([k,t])=>`<button class="ena-tab ${ui.tab[app]===k?'ena-tab-on':''}" data-tab-group="${app}" data-tab="${k}">${encode(t)}</button>`).join('')}</div>`;}
+  function tabs(app){
+    const legacy=appTabs[app].map(([k,t])=>`<button class="ena-tab ${ui.tab[app]===k?'ena-tab-on':''}" data-tab-group="${app}" data-tab="${k}">${encode(t)}</button>`).join('');
+    if(app!=='gm')return `<div class="ena-tabs">${legacy}</div>`;
+    // Compact navigation is a view, not a migration: every historical tab remains below.
+    const main=[['overview','Обзор'],['profiles','Досье'],['inventory','Имущество'],['quests','Дела'],['states','История'],['sync','Синхронизация']];
+    return `<div class="ena-tabs ena-gm-compact-tabs">${main.map(([id,label])=>`<button class="ena-tab ${ui.tab.gm===id?'ena-tab-on':''}" data-tab-group="gm" data-tab="${id}">${label}</button>`).join('')}</div><details class="ena-gm-all-tabs"><summary>▸ Все прежние разделы (банк, тело, побочные, знания NPC, события, риски и т. д.)</summary><div class="ena-tabs">${legacy}</div></details>`;
+  }
   function paneHeader(label){return `<div class="ena-beta-controls"><b>${encode(label)}</b><label>Поиск <input data-beta-input="search" value="${encode(filter)}" placeholder="Поиск в этом окне…"></label><button data-beta="new" type="button">+ Добавить</button></div>`;}
   function activeScope(app){const tab=ui.tab[app]==='wardrobe'&&app==='gm'?'profiles':ui.tab[app];return app+':'+(tab||appTabs[app]?.[0][0]);}
   function summaryPanel(app){
@@ -211,9 +219,9 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     const cards=shown.map(x=>`<article class="ena-beta-proposal ena-proposal-compact ${valid(x)?'':'ena-beta-invalid'}">
       <label class="ena-proposal-select"><input type="checkbox" data-beta-input="proposal-select" data-id="${encode(x.id)}" ${selectedProposalIds.has(x.id)?'checked':''} aria-label="Выбрать факт ${encode(x.title)}"><span>Выбрать</span></label>
       <details data-ena-fold="proposal-${encode(x.id)}" ${foldState.get('proposal-'+x.id)?'open':''} class="ena-proposal-fold"><summary><b>${encode(['gm:profiles','gm:wardrobe'].includes(x.scope)?`${x.subject||'Персонаж не указан'} · ${x.scope==='gm:wardrobe'?'Гардероб: ':''}${x.attribute||x.title}`:x.title)}</b><small>${encode(SCOPE_OPTIONS[x.scope]||x.scope)} · ${encode(factLabels[x.factType||'objective'])} · ${encode(x.sources?.map(z=>'#'+z.index).join(', ')||'без источника')}</small></summary>
-      <div class="ena-proposal-fold-body">${x.operation==='update'?'<small class="ena-entity-hint">Уточнение существующего свойства — при подтверждении предыдущее значение останется в истории.</small>':''}${isStateScope(x.scope)?`<small class="ena-entity-hint">Состояние: ${encode(STATE_LABELS[x.entityStatus]||x.entityStatus||'не задано')} · ${encode(x.entityLabel||x.entityKey||x.title)} · ${encode(x.action||'событие')}</small>`:''}
-      <p>${encode(x.detail)}</p>${x.quote?`<blockquote>${encode(x.quote)}</blockquote>`:''}<small>Источник: ${encode(x.sources?.map(z=>'#'+z.index).join(', ')||'—')} ${valid(x)?'✓ присутствует':'⚠ изменён или удалён'} · ${encode(x.confidence||'не оценена')}</small>
-      <details class="ena-beta-preview"><summary>Как изменится база после подтверждения?</summary><div><b>${encode(SCOPE_OPTIONS[x.scope]||x.scope)} → ${isStateScope(x.scope)?'создание / обновление состояния':x.operation==='update'?'уточнение поля досье (с историей)':'новая запись'}</b><p>${encode(x.title)}</p><p>${encode(x.detail)}</p><small>${encode(factLabels[x.factType||'objective'])}; ${x.sources?.map(z=>'#'+z.index).join(', ')||'—'}</small></div></details>
+      <div class="ena-proposal-fold-body">${x.operation==='conflict'?'<small class="ena-beta-warning"><b>⚠ Возможно противоречие</b>: новое значение того же поля отличается от уже подтверждённого. Проверь источники до утверждения; старые значения сохраняются.</small>':x.operation==='update'?'<small class="ena-entity-hint">Уточнение существующего свойства — при подтверждении предыдущее значение останется в истории.</small>':''}${isStateScope(x.scope)?`<small class="ena-entity-hint">Состояние: ${encode(STATE_LABELS[x.entityStatus]||x.entityStatus||'не задано')} · ${encode(x.entityLabel||x.entityKey||x.title)} · ${encode(x.action||'событие')}</small>`:''}
+      <p>${encode(x.detail)}</p>${x.quote?`<blockquote>${encode(x.quote)}</blockquote>`:''}<small>Источник: ${encode(x.sourceType==='lorebook'?`World Info · ${x.sourceTitle||'импортированный лорбук'}`:x.sources?.map(z=>'#'+z.index).join(', ')||'—')} ${valid(x)?'✓ присутствует':'⚠ изменён или удалён'} · ${encode(x.confidence||'не оценена')}</small>
+      <details class="ena-beta-preview"><summary>Как изменится база после подтверждения?</summary><div><b>${encode(SCOPE_OPTIONS[x.scope]||x.scope)} → ${isStateScope(x.scope)?'создание / обновление состояния':x.operation==='conflict'?'возможное противоречие существующему полю':x.operation==='update'?'уточнение поля досье (с историей)':'новая запись'}</b><p>${encode(x.title)}</p><p>${encode(x.detail)}</p><small>${encode(factLabels[x.factType||'objective'])}; ${x.sources?.map(z=>'#'+z.index).join(', ')||'—'}</small></div></details>
       <div class="ena-beta-proposal-actions">${x.status==='pending'?`<button data-beta="approve" data-id="${encode(x.id)}" ${valid(x)?'':'disabled'}>Подтвердить</button><button data-beta="edit-proposal" data-id="${encode(x.id)}">✎ Изменить</button><button data-beta="split-proposal" data-id="${encode(x.id)}">Разделить</button><button data-beta="reject" data-id="${encode(x.id)}">Отклонить</button>`:x.status==='deleted'?`<button data-beta="restore-proposal" data-id="${encode(x.id)}">Восстановить на рассмотрение</button>`:`<button data-beta="restore-proposal" data-id="${encode(x.id)}">Вернуть на рассмотрение</button>`}<button data-beta="delete-proposal" data-id="${encode(x.id)}" ${x.status==='deleted'?'disabled':''}>Удалить</button></div></div></details></article>`).join('');
     const f=b.fullScan||{cursor:0,total:0,status:'idle',added:0,blocks:0};
     const progress=f.total?Math.min(100,Math.round((f.cursor||0)/f.total*100)):0;
@@ -226,9 +234,9 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     const dg=b.scanDiagnostics||{},discardText=Object.entries(dg.discarded||{}).map(([k,v])=>`${encode(k)}: ${Number(v)}`).join(' · ');
     const extraStats=(dg.status==='read-inspect'?dg.ranges:dg.sourceStats?[dg.sourceStats]:[])||[];
     const statsHtml=extraStats.length?`<div class="ena-source-inspect" style="border-top:1px solid #aaa;padding:8px 0;margin-top:8px"><b>Чтение сообщений (без передачи текста в сеть)</b>${extraStats.map(v=>`<p>Диапазон ${Number(v.start)+1}–${Number(v.end)}: из ${v.entries} записей читаемых ${v.text}, исключено служебных ${v.system}, помечено is_system ${v.flaggedSystem}, но восстановлено игровых ${v.recoveredSystem}, пустых/пропущенных ${v.empty}; через mes ${v.mes}, запасные поля ${v.fallback}.</p>${(v.samples||[]).map(x=>`<small>#${x.index}: ${encode(x.type)}, is_system=${x.is_system}, длина=${x.length}; mes:${encode(x.mesType||'—')}, text:${encode(x.textType||'—')}, content:${encode(x.contentType||'—')}; поля: ${encode((x.keys||[]).join(', '))}</small>`).join('<hr>')}`).join('')}</div>`:'';
-    const previewHtml=(dg.preview||[]).length?`<details class="ena-extraction-preview" style="border-top:1px solid #aaa;margin-top:10px;padding-top:8px"><summary><b>Что именно предложила модель (${dg.preview.length})</b> — предварительный просмотр, не сохраняется в факты</summary>${dg.preview.map((x,i)=>`<details class="ena-diagnostic-card"><summary>${i+1}. ${x.accepted?'✓ Технически допустимо':'✕ Отброшено: '+encode(x.reason)} · ${encode(x.subject?`${x.subject} · ${x.attribute||x.title}`:x.title)} · ${encode(SCOPE_OPTIONS[x.scope]||x.scope||'без категории')}</summary><div class="ena-diagnostic-body" style="border-left:3px solid ${x.accepted?'#71886d':'#aa624b'}"><p>${encode(x.detail)}</p><blockquote>${encode(x.quote)}</blockquote>${x.operation==='update'?'<small>Предлагается уточнение существующего свойства досье, не новая анкета.</small>':''}${x.evidenceMode==='fragments'?'<small>Основание: сокращённая цитата, фрагменты найдены по порядку в одном сообщении. Смысл проверь вручную.</small>':''}</div></details>`).join('')}<p><small>Зелёная отметка означает только техническую проверку: подтверждение смысла цитаты всё ещё требует просмотра.</small></p></details>`:'';
+    const previewHtml=(dg.preview||[]).length?`<details class="ena-extraction-preview" style="border-top:1px solid #aaa;margin-top:10px;padding-top:8px"><summary><b>Что предложено к проверке (${dg.preview.length})</b> — предварительный просмотр, не сохраняется в факты</summary>${dg.preview.map((x,i)=>`<details class="ena-diagnostic-card"><summary>${i+1}. ${x.accepted?'✓ Технически допустимо':'✕ Отброшено: '+encode(x.reason)} · ${encode(x.subject?`${x.subject} · ${x.attribute||x.title}`:x.title)} · ${encode(SCOPE_OPTIONS[x.scope]||x.scope||'без категории')}</summary><div class="ena-diagnostic-body" style="border-left:3px solid ${x.accepted?'#71886d':'#aa624b'}"><p>${encode(x.detail)}</p><blockquote>${encode(x.sourceType==='lorebook'?'Основание: World Info · '+(x.sourceTitle||'импортированный лорбук'):x.quote||'')}</blockquote>${x.operation==='conflict'?'<small><b>⚠ Возможное противоречие подтверждённому свойству: проверь вручную.</b></small>':x.operation==='update'?'<small>Предлагается уточнение существующего свойства досье, не новая анкета.</small>':''}${x.evidenceMode==='fragments'?'<small>Основание: сокращённая цитата, фрагменты найдены по порядку в одном сообщении. Смысл проверь вручную.</small>':''}</div></details>`).join('')}<p><small>Зелёная отметка означает только техническую проверку: подтверждение смысла цитаты всё ещё требует просмотра.</small></p></details>`:'';
     const diagnostics=`<section class="ena-beta-warning" style="margin-top:10px;padding:10px"><b>Диагностика извлечения • просмотр предложений без сохранения</b><p>Один тест = один API-запрос, ориентировочно 8–10 сообщений. Текущая позиция полной проверки не меняется.</p><button type="button" data-beta="scan-read-inspect">Чтение чата (0 API-запросов)</button> <button type="button" data-beta="scan-diagnose-early" ${fullScanRunning||extracting?'disabled':''}>Проверить сообщения 1–10</button> <button type="button" data-beta="scan-diagnose-current" ${fullScanRunning||extracting?'disabled':''}>Проверить у позиции ${Number(f.cursor||0)+1}</button>${dg.status==='idle'?'':`<p><b>${encode(dg.status||'')}</b> • сообщения ${Number(dg.start??0)+1}–${Number(dg.end??0)} • модель предложила: ${Number(dg.extracted)||0}, прошло проверку: ${Number(dg.acceptable)||0}, создано: ${Number(dg.added)||0}</p><p>${discardText||'Ошибок проверки нет'}</p>${dg.error?`<p>Ошибка: ${encode(dg.error)}</p>`:''}${dg.status==='empty'?'<p>Модель вернула {"changes":[]}; это не ошибка JSON, но отсутствие событий пока не подтверждено.</p>':''}`}${previewHtml}${statsHtml}</section>`;
-    return `<div class="ena-content ena-scroll ena-beta-space">${fold('gm-options','Модель и настройки · '+encode(selectedProviderLabel()),`<div class="ena-beta-banner"><b>Режим: объективный справочник</b><p>GM собирает объективные сведения о персонажах, животных, гардеробе, вещах и делах. Гардероб раскрывается строкой внутри досье. Memory Books хранит сцены и отношения.</p><b>Источник ИИ: ${encode(selectedProviderLabel())}</b><p>Выбранный профиль GM не переключает модель рассказчика. Результаты записываются только после твоего подтверждения.</p>${profileSelect()}<label>Насколько подробно извлекать факты <select data-beta-setting="detailLevel"><option value="focused" ${s.detailLevel==='focused'?'selected':''}>Строго: факты справочника (рекомендовано)</option><option value="balanced" ${s.detailLevel==='balanced'?'selected':''}>Стандартно: справочные подробности</option><option value="detailed" ${s.detailLevel==='detailed'?'selected':''}>Подробно: без выдумок и дублей</option></select></label><label>Этап справочника <select data-beta-setting="extractionPhase"><option value="catalog" ${s.extractionPhase!=='updates'?'selected':''}>Первичное заполнение: все новые достоверные свойства</option><option value="updates" ${s.extractionPhase==='updates'?'selected':''}>Обновления: только новые и изменённые сведения</option></select></label><small>Новый режим: только фактические сведения, которые Ена действительно узнала. SMS, отношения, пересказы сцен и догадки не извлекаются автоматически. Старые записи сохраняются.</small><p>Обработано блоков: ${b.syncRuns||0}; сообщений в чате: ${c.length}; текущая позиция: ${b.syncCursor===null?'ещё не задана':b.syncCursor}.</p></div>`)}
+    return `<div class="ena-content ena-scroll ena-beta-space">${fold('gm-options','Модель и настройки · '+encode(selectedProviderLabel()),`<div class="ena-beta-banner"><b>Режим: объективный справочник</b><p>GM собирает объективные сведения о персонажах, животных, гардеробе, вещах и делах. Гардероб раскрывается строкой внутри досье. Memory Books хранит сцены и отношения.</p><b>Источник ИИ: ${encode(selectedProviderLabel())}</b><p>Выбранный профиль GM не переключает модель рассказчика. Результаты записываются только после твоего подтверждения.</p>${profileSelect()}<div class="ena-beta-warning"><b>Внешность из World Info — один раз при встрече</b><p>Загрузи экспорт World Info (JSON). Расширение берёт только секцию внешности и постоянные приметы; ни прозвищ, ни вывода внешности из диалогов. При первом явном упоминании имени появится ОДНО предложение для досье. Доказательство будет помечено как «World Info», без фальшивой цитаты из чата. Само включение/отключение лорбука SillyTavern не гарантирует передачу его в отдельные запросы Connection Manager.</p><button type="button" data-beta="choose-lorebook">Загрузить World Info JSON</button><input class="ena-beta-file-hidden" data-beta-input="lorebook" type="file" accept="application/json,.json"><small>Загружено профилей: ${b.lorebookProfiles.length}; предложено ранее: ${b.lorebookSeen.length}. Загруженный файл хранится как часть полного экспорта Ena Desktop.</small></div><label>Насколько подробно извлекать факты <select data-beta-setting="detailLevel"><option value="focused" ${s.detailLevel==='focused'?'selected':''}>Строго: факты справочника (рекомендовано)</option><option value="balanced" ${s.detailLevel==='balanced'?'selected':''}>Стандартно: справочные подробности</option><option value="detailed" ${s.detailLevel==='detailed'?'selected':''}>Подробно: без выдумок и дублей</option></select></label><label>Этап справочника <select data-beta-setting="extractionPhase"><option value="catalog" ${s.extractionPhase!=='updates'?'selected':''}>Первичное заполнение: все новые достоверные свойства</option><option value="updates" ${s.extractionPhase==='updates'?'selected':''}>Обновления: только новые и изменённые сведения</option></select></label><small>Новый режим: только фактические сведения, которые Ена действительно узнала. SMS, отношения, пересказы сцен и догадки не извлекаются автоматически. Старые записи сохраняются.</small><p>Обработано блоков: ${b.syncRuns||0}; сообщений в чате: ${c.length}; текущая позиция: ${b.syncCursor===null?'ещё не задана':b.syncCursor}.</p></div>`)}
       ${fold('gm-scan','Управление проверкой чата',`<div class="ena-beta-controls"><button data-beta="scan-last" ${extracting?'disabled':''}>Последние ${Number(s.interval||50)} сообщений</button><button data-beta="scan-new" ${extracting?'disabled':''}>Новые сообщения</button>${work}<button data-beta="export">⬇ Полный экспорт JSON</button><button type="button" data-beta="choose-import">⬆ Импорт JSON</button><input class="ena-beta-file-hidden" data-beta-input="import" type="file" accept="application/json,.json"></div>`)}
       ${fold('gm-maintenance','Обслуживание, очистка ошибок и прогресса',`<div class="ena-scan-maintenance"><b>Обслуживание диагностики</b><div class="ena-bulk-buttons"><button type="button" data-beta="clear-scan-errors" ${fullScanRunning||extracting?'disabled':''}>Очистить ошибки и диагностику</button><button type="button" data-beta="reset-scan-progress" ${fullScanRunning||extracting?'disabled':''}>Сбросить прогресс проверки</button></div><small>Очистка ошибок не трогает факты или позицию. Сброс прогресса обнуляет только счётчики сканирования, но не предложения, принятые записи и историю чата. Старые ошибочные блоки больше не считаются обработанными.</small></div>`)}<div class="ena-beta-notice">Полная проверка выполняется порциями по ${Number(s.interval)||50} сообщений через выбранный API-профиль. Каждая порция — отдельный платный запрос; можно остановить и возобновить. Принятые, на рассмотрении и отклонённые предложения блокируют повторное появление по тому же источнику и цитате. Удалённые — не блокируют. Импорт/экспорт включает ВСЮ базу со статусами и историей.</div>${fold('gm-scan-status','Ход полной проверки'+(f.total?' · '+progress+'%':'')+(f.lastError?' · есть ошибка':''),progressBar+legacyWarning)}${fold('gm-diagnostics','Диагностика'+(dg.status!=='idle'?' · '+encode(dg.status)+' · '+Number(dg.acceptable||0)+' проверены':'') ,diagnostics)}
       <div class="ena-fact-status-tabs">${[['pending','На рассмотрении'],['approved','Принятые'],['rejected','Отклонённые'],['deleted','Удалённые']].map(([k,v])=>`<button type="button" data-beta="fact-tab" data-value="${k}" class="${factTab===k?'ena-fact-status-active':''}">${v} (${counts[k]})</button>`).join('')}</div>
@@ -312,6 +320,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
       const b=state(),start=type==='scan-diagnose-early'?0:Math.min(b.fullScan?.cursor||0,Math.max(0,messages().length-1));
       foldState.set('gm-diagnostics',true);void scanChunk(start,10,{updateCursor:false,dryRun:true});return true;
     }
+    if(type==='choose-lorebook'){const input=el.closest('.ena-window')?.querySelector('input[data-beta-input="lorebook"]');if(input){input.value='';input.click();}return true;}
     if(type==='choose-import'){const input=el.closest('.ena-window')?.querySelector('input[data-beta-input="import"]');if(!input){toast('Поле импорта недоступно');return true;}input.value='';input.click();return true;}
     if(type==='edit-proposal'||type==='split-proposal'){const rec=state().proposals.find(x=>x.id===el.dataset.id);if(!rec||rec.status!=='pending')return true;proposalEditor={id:rec.id,mode:type==='split-proposal'?'split':'edit'};fillWindow('gm');return true;}
     if(type==='cancel-proposal'){proposalEditor=null;fillWindow('gm');return true;}
@@ -341,7 +350,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     if(type==='approve'||type==='reject'){const p=state().proposals.find(x=>x.id===el.dataset.id);if(!p)return true;if(type==='approve'&&!valid(p)){toast('Основание изменено: нельзя подтвердить');return true;}
       p.status=type==='reject'?'rejected':'approved';if(type==='approve'){
         p.scope=referenceScope(p.scope,p.attribute);
-        const fields={title:p.title,detail:p.detail,extra:p.extra||'',date:p.date||'',subject:p.subject||'',attribute:p.attribute||'',status:'active',factType:p.factType||'objective'};
+        const fields={title:p.title,detail:p.detail,extra:p.extra||'',date:p.date||'',subject:p.subject||'',attribute:p.attribute||'',status:'active',factType:p.factType||'objective',sourceType:p.sourceType||'',sourceTitle:p.sourceTitle||'',lifetime:p.lifetime||''};
         if(p.scope.startsWith('archive:')){
           const cat=p.scope.split(':')[1];const a=meta().archive[cat];const recordId=key();p.linkedRecordId=recordId;a.push({id:recordId,proposalId:p.id,title:p.title,detail:p.detail,year:p.year||'',progress:cat==='anomalies'?'found':({films:['seen','started','planned'],books:['read','started','planned'],music:['listened','started','planned']}[cat]||[]).includes(p.progress)?p.progress:'planned',ownership:p.owned?'personal':'unknown',source:p.sources?.map(x=>'#'+x.index).join(', '),autoSources:p.sources,standStatus:'unknown'});
         }else if(!isStateScope(p.scope)||!entityKeyOf(p)){const recordId=key();p.linkedRecordId=recordId;state().records.push({id:recordId,proposalId:p.id,scope:p.scope,...fields,amount:p.amount??'',currency:p.currency||'₤',sources:p.sources,manual:false,created:dateTime()});}
@@ -397,9 +406,23 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
   }
   function change(el,ev){if(el.dataset.betaInput==='proposal-select'){if(el.checked)selectedProposalIds.add(el.dataset.id);else selectedProposalIds.delete(el.dataset.id);refreshBulkControls();return true;}if(el.dataset.betaSetting){const s=settings().enaSync;const name=el.dataset.betaSetting;s[name]=el.type==='checkbox'?el.checked:['profileId','detailLevel','extractionPhase'].includes(name)?String(el.value):Number(el.value)||50;persistSettings();if(name==='profileId'){toast('Профиль GM: '+selectedProviderLabel());fillWindow('gm');}return true;}
     if(el.dataset.betaInput==='import'){const file=el.files?.[0];if(file)void importBackup(file);return true;}
+    if(el.dataset.betaInput==='lorebook'){const file=el.files?.[0];if(file)void importLorebook(file);return true;}
     return false;
   }
   function input(el){if(el.dataset.betaInput==='search'){filter=el.value;const app=el.closest('.ena-window')?.dataset.app;const content=el.closest('.ena-window')?.querySelector('.ena-beta-records,.ena-beta-empty');if(app&&TABLES[activeScope(app)]){const temp=document.createElement('div');temp.innerHTML=renderRows(activeScope(app),app);const container=el.closest('.ena-window')?.querySelector('.ena-content');if(container)container.innerHTML=temp.innerHTML;}return true;}return false;}
+  async function importLorebook(file){
+    if(fullScanRunning||extracting){toast('Нельзя менять лорбук во время анализа');return;}
+    try{
+      const obj=JSON.parse(await file.text()),list=parseLorebookProfiles(obj);
+      if(!list.length){toast('В этом JSON не найдены отдельные описания внешности персонажей');return;}
+      if(!confirm(`Загрузить ${list.length} описаний внешности из World Info? Старые факты и статусы не изменятся. Новые предложения появятся при встрече имени в анализируемых сообщениях.`))return;
+      const b=state();b.lorebookProfiles=list;
+      // Remember already proposed lorebook profiles to avoid repeat after file reimport.
+      b.lorebookSeen=[...new Set([...b.lorebookSeen,...b.proposals.filter(p=>p.sourceType==='lorebook').map(p=>p.subject)])];
+      queueHistory('Загружен World Info: '+list.length+' профилей внешности');saveMeta();
+      if(ui.windows.has('gm'))fillWindow('gm');toast('Лорбук загружен: '+list.length+' описаний');
+    }catch(e){toast('Ошибка World Info JSON: '+String(e.message||e).slice(0,180));}
+  }
   function downloadSnapshot(payload){
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),object=URL.createObjectURL(blob),link=document.createElement('a');
     link.href=object;link.download='EnaDesktop_FULL_'+new Date().toISOString().slice(0,10)+'.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(object),5000);
@@ -491,6 +514,8 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
       if(!SCOPE_KEYS.includes(change.scope)){skip('категория вне списка',change);continue;}
       if(!OBJECTIVE_SCOPE_SET.has(change.scope)){skip('не раздел объективного справочника (сюжет/отношения/догадки)',change);continue;}
       if(change.factType&&change.factType!=='objective'){skip('мнение или подозрение вместо объективного факта',change);continue;}
+      if(change.scope==='gm:profiles'&&physicalAttribute(change.attribute)){skip('внешность берётся один раз из World Info, не из сцен',change);continue;}
+      if(change.longevity==='oneoff'){skip('разовый эпизод без устойчивого свойства или состояния',change);continue;}
       const ids=Array.isArray(change.message_ids)?change.message_ids:[];
       if(!ids.length||ids.length>3||ids.some(id=>typeof id!=='string'||!/^m\d+$/.test(id))){skip('неверные message_ids',change);continue;}
       const sources=ids.map(id=>payload[Number(id.slice(1))]).filter(Boolean);
@@ -509,11 +534,11 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
       const signature=digest([effectiveScope,factType,title,detail,...sources.map(x=>x.key)].join('|'));
       const evidence=sources.map(x=>({index:x.index,key:x.key}));
       const scope=referenceScope(change.scope,change.attribute);
-      const candidate={signature,scope,factType,title,detail,quote,sources:evidence,subject:String(change.subject||'').trim().slice(0,100),attribute:String(change.attribute||'').trim().slice(0,90)};
+      const candidate={signature,scope,factType,title,detail,quote,sources:evidence,subject:String(change.subject||'').trim().slice(0,100),attribute:String(change.attribute||'').trim().slice(0,90),lifetime:lifetime(scope,change.attribute,change.longevity)};
       const referenceHint=referenceAction(candidate,bExistingRecords(),[...existing,...candidates]);
       if(referenceHint.type==='repeat'){skip('свойство/комплект уже записаны',change);continue;}
       if(!canPropose(candidate,[...existing,...candidates])){skip('дубликат существующего факта',change);continue;}
-      candidates.push({signature,scope:effectiveScope,factType,title,detail,quote,sources:evidence,operation:referenceHint.type,previousId:referenceHint.previousId||'',
+      candidates.push({signature,scope:effectiveScope,factType,title,detail,quote,sources:evidence,operation:referenceHint.type,previousId:referenceHint.previousId||'',lifetime:candidate.lifetime,
         extra:String(change.extra||'').slice(0,200),date:String(change.date||'').slice(0,70),year:String(change.year||'').slice(0,40),
         subject:['gm:profiles','gm:wardrobe'].includes(change.scope)?String(change.subject||'').trim().slice(0,100):'',attribute:['gm:profiles','gm:wardrobe'].includes(change.scope)?String(change.attribute||'').trim().slice(0,90):'',
         progress:String(change.progress||'').slice(0,40),owned:change.owned===true,confidence:String(change.confidence||'').slice(0,30),evidenceMode:matchedSource.check.mode,
@@ -530,8 +555,24 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     async function scanChunk(start, limit, {updateCursor=true,dryRun=false}={}){ 
     if(extracting)return null;
     const c=ctx();if(!c){toast('SillyTavern недоступна');return null;}
-    const bag=activeChatKey(),b=state(),chat=messages(),end=Math.min(chat.length,start+limit);
-    const portion=chat.slice(start,end).map((x,i)=>({index:start+i,key:messageKey(x),speaker:x.is_user?'Ена/пользователь':'Рассказчик',text:(()=>{const m=messageText(x);return m.length>5000?m.slice(0,2600)+'\n[... фрагмент длинного сообщения пропущен ...]\n'+m.slice(-2300):m;})()})).filter(x=>x.key&&x.text.trim());
+    const bag=activeChatKey(),b=state(),chat=messages();
+    let end=Math.min(chat.length,start+limit),used=0;
+    const payloadFull=[];
+    for(let i=start;i<end;i++){
+      const x=chat[i],raw=messageText(x),sourceKey=messageKey(x);
+      if(sourceKey&&raw.trim()){
+        if(raw.length>60000){
+          const problem=`Сообщение #${i+1} слишком длинное (${raw.length} символов). Оно НЕ обрезано и НЕ помечено обработанным. Раздели большой архивный блок или исключи его вручную.`;
+          b.scanDiagnostics={status:'long-message',start,end:i+1,error:problem};
+          if(fullScanRunning){b.fullScan.lastError=problem;b.fullScan.failedStart=i;b.fullScan.status='paused';}
+          saveMeta();toast(problem);return null;
+        }
+        if(used+raw.length>60000&&payloadFull.length){end=i;break;}
+        used+=raw.length;
+        payloadFull.push({index:i,key:sourceKey,speaker:x.is_user?'Ена/пользователь':'Рассказчик',text:raw});
+      }
+    }
+    const portion=payloadFull;
     if(end<=start)return {next:end,added:0};
     if(!portion.length){
       const sample=messageSourceStats(chat,start,limit);
@@ -544,37 +585,42 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
       return null;
     }
     extracting=true;toast('Проверяю сообщения '+(start+1)+'–'+end+' · '+selectedProviderLabel());if(ui.windows.has('gm'))fillWindow('gm');
-    const system=`Ты — ENA DESKTOP OBJECTIVE NOTEBOOK EXTRACTOR: фактический справочник по уже сыгранной истории JoJo: Golden Wind, Неаполь 2001. Memory Books хранит сцены и отношения; ты их не пересказываешь. Используй только сведения из данного блока. Если ничего нового нет, верни {"changes":[]}.
+    const system=`Ты ведёшь СПРАВОЧНИК подтверждённых сведений AU «Неаполь, 2001», а НЕ дневник событий, НЕ Memory Books и НЕ ролевой рассказчик.
 
-ЧТО НУЖНО СОХРАНЯТЬ: (1) Подтверждённые особенности персонажей: рост, глаза, волосы, характерные шрамы/татуировки, устойчивые привычки, работа, адрес, оружие (марку только если названа), любимые блюда и произведения. Первичное досье может содержать МНОГО новых свойств — это нормально! Разные свойства персонажа отдельными полями одного досье (subject + attribute); не считай нужным создавать по 1 карточке на каждый жест. (2) ГАРДЕРОБ — НЕ ОТДЕЛЬНОЕ ПРИЛОЖЕНИЕ/ДОСЬЕ, а раскрывающаяся СТРОКА в досье владельца, внутренний тип данных gm:wardrobe. Важна одежда Ены и других людей: из чего состоит надетый комплект, принадлежность, цвет, фактура, аксессуары, где хранится, покупка/потеря. Если одновременно названы плащ, топ и брюки — сгруппируй ОДИН КОМПЛЕКТ на персонажа в этой сцене, а не три отдельных факта. Различай «надето сейчас», «владеет» и «просто видела». Не предполагай, что одежда всё ещё надета спустя десятки сообщений. (3) Вещи с долговременным значением, финансы, лечение травм, документы, задачи, адреса и наблюдаемые предметы в помещениях; кот — живое существо (досье/справочник), не имущество-инвентарь. (4) Подтверждённые книги/фильмы/музыка, статус покупки/прочтения/просмотра не выдумывать.
+ПРОЦЕСС ВНУТРИ ОДНОГО ЗАПРОСА (без отдельных API-вызовов):
+ЭТАП 1. Прочитай КАЖДОЕ сообщение ЦЕЛИКОМ. Определи, какие предметы, персонажи, животные, места, дела или характеристики упоминаются; отличай авторский объективный текст от реплики/догадки персонажа. Не выдавай сырой пересказ.
+ЭТАП 2. Разбери сведения ПО КАТЕГОРИЯМ и сравни с известной базой. Не превращай одно сообщение в двадцать карточек от одних прилагательных. Краткая сводка сообщения — твоя внутренняя рабочая операция, она не должна сама становиться записью.
+ЭТАП 3. Отбрось повторы и эпизоды без продолжающегося значения. Если несколько разных подтверждённых фактов в одном сообщении — оставь их РАЗНЫМИ объектами в changes этого сообщения. Не объединяй два независимых факта в один туманный текст. При отсутствии фактов дай пустой массив.
 
-ИСТОЧНИКИ: Авторское описание рассказчика — ПОЛНОЦЕННЫЙ источник наблюдаемой физической информации (цвет, фактура и фасон одежды, внешний вид, предметы, помещение), наравне с прямой речью. Нельзя требовать, чтобы Ена повторила описание вслух. Но тайные мысли NPC, неозвученные секреты и скрытые от Ены обстоятельства не становятся её знаниями. В нарративе «незнакомка» — не обязательно новое лицо: устанавливай, что это Ена, только по явной связке с контекстом; если не доказано, сохраняй как «неустановленная женщина» для ручного уточнения, не создавай вторую Ену без подтверждения.
+ВНЕШНОСТЬ НЕ ИЗВЛЕКАТЬ ИЗ ЧАТА: рост, глаза, волосы, кожа, обычные шрамы, татуировки и постоянные приметы человека заполняются ОДИН РАЗ из явно импортированного World Info. Не предлагай здесь gm:profiles для внешности или примет. Одежда / гардероб — исключение: её можно брать из авторского описания в текущей сцене. Другие поля досье допустимы: фактически установленные навыки, известные предпочтения, профессия, модель оружия, биография, устойчивые привычки. Никакой системы прозвищ, поиска старых имён или автоматической переидентификации «незнакомки» в Ену: не знаешь кто — пропусти персональную характеристику.
 
-НЕ НУЖНО: хроника, кто на кого посмотрел, улыбнулся, кто кому написал SMS или позвонил, встречи, ревность, поцелуи, дружба, отношения, эмоции, догадки о характере и психологии, содержание интимных сцен. Случайный билет, перекус, разовая бумажка — только если у них есть продолжающееся материальное или сюжетное значение. Постоянная примета (надорванное ухо кота) — не активная свежая травма. Настоящую рану фиксируй как состояние и обновляй после лечения. Никаких догадок о марке оружия, биографии, хронологии и чужой памяти. Не импортируй «Марево» в этот AU и не путай диски с кассетами.
+ЧТО ХРАНИТЬ: объективные и полезные сведения о вещах, гардеробе, книгах, фильмах, дисках, салоне, финансах, оружии, помещениях, травмах, лечении, задачах, характеристиках НЕ-внешности. Животное — самостоятельный субъект досье, не инвентарь; разовые движения кота не записывай как его устойчивое поведение. По еде — конкретные запасы, покупки и любимые блюда, не каждый перекус. Старые шрамы — не новая рана. Временно надетое — не доказательство владения.
 
-КАТЕГОРИИ: ровно ${OBJECTIVE_SCOPE_KEYS.join(', ')}. Для gm:profiles используй subject (имя) и attribute (свойство). Для gm:wardrobe используй subject (кто носит; если владелец не установлен — не приписывай владение), attribute (например «комплект: фиолетовая накидка / чёрный топ / брюки»), title и detail о составе комплекта и статусе. Сведения о временно надетом не являются автоматической покупкой в инвентарь. Только factType=objective; gm:events/gm:knowledge/gm:risks и SMS/mail не предлагать.
+НЕ ХРАНИТЬ: события, хронологию сцен, SMS, пересказы разговоров, взгляды, поцелуи, общение, отношения к Ене, чувства, мысли, скрытые намерения, догадки. Внешние сведения без прямого основания и приписывание знания персонажу не допускаются. Не смешивай мир «Марево» с этим JoJo AU. Не называй диски VHS-кассетами.
 
-ДОКАЗАТЕЛЬСТВА: каждый пункт сопровождай реальным message_ids из текущего блока (m0, m1...), quote. Лучше точная дословная цитата из ОДНОГО сообщения. Допускается сокращённая цитата из того же сообщения с «...» или «…» между двумя или более дословными фрагментами В ПРАВИЛЬНОМ ПОРЯДКЕ. Нельзя изменять слова внутри фрагментов или склеивать куски разных сообщений. Никаких цитат из других сообщений, несуществующих вещей и недоказанных выводов. Если не можешь предъявить основание — пропусти факт. Разделяй наблюдение и слова персонажа: «со слов X» не равно доказанному факту, если он мог солгать.
+КАТЕГОРИИ только: ${OBJECTIVE_SCOPE_KEYS.join(', ')}. Для досье — subject=явное имя и attribute=поле. Для гардероба — subject=носитель, attribute=«комплект одежды» или название вещи, detail=описание, причём «надето» не означает «принадлежит». factType=objective. Для изменяемого факта дай longevity=state, для временного wardrobe=temporary, для постоянного permanent. Разовые события без последствия пропускай.
 
-ОТВЕТ: только JSON {"changes":[]} или {"changes":[{"scope":"gm:profiles","factType":"objective","subject":"персонаж","attribute":"устойчивое свойство","title":"название","detail":"сам проверяемый факт","message_ids":["m0"],"quote":"точная подстрока сообщения или дословные фрагменты с ...","confidence":"high"}]}. Пример описывает СХЕМУ, а не реальную информацию о персонажах. Дополнительные поля для состояний: entityKey, entityLabel, action, entityStatus, entityOwner; для прочего progress, owned. Все названия по-русски, имена и бренды как в источнике. НЕ ПРОДОЛЖАЙ РОЛКУ.`;
+ЦИТАТЫ: используй дословный фрагмент одного исходного сообщения (можно с ... между кусками того же текста по порядку). Авторское объективное описание подходит, не обязательно фраза Ены. Цитата должна ДОКАЗЫВАТЬ смысл, а не просто встречаться в тексте. Не меняй внутри цитаты слова.
+
+ОТВЕТ — ТОЛЬКО JSON вида:
+{"messages":[{"id":"m0","changes":[{"scope":"gm:inventory","factType":"objective","subject":"","attribute":"","title":"Краткий предметный заголовок","detail":"Подтверждённый факт","quote":"дословный текст сообщения","longevity":"state","entityKey":"","action":"create","entityStatus":"active","confidence":"high"}]},{"id":"m1","changes":[]}]}
+Сообщения с нулём новых фактов могут быть опущены. changes — отдельные факты по каждому сообщению. Для случаев, подтверждаемых несколькими сообщениями, используй message_ids:["m0","m1"] в самом факте. Пример отражает ТОЛЬКО структуру JSON, не реальные предметы. НЕ ПРОДОЛЖАЙ РОЛКУ.`;
     const stateRules=`
-ОБЪЕКТИВНЫЙ РЕЕСТР, НЕ ЖУРНАЛ СОБЫТИЙ: для gm:inventory, gm:body, gm:quests, gm:sidequests и salon:tasks/stock используй одинаковый entityKey при изменении одной и той же сущности. Поля: entityKey, entityLabel, action=create|update|resolve|transfer|lose|restore, entityStatus=active|planned|in_progress|completed|held|transferred|lost|healed|resolved|found. Если факт уже известен, НЕ повторяй его на каждое упоминание. Для свойств досье с тем же subject+attribute уточнение — update, но не создавай новую анкету; ранее установленное значение не переписывай без прямого нового основания. Повторное действие над предметом должно обновлять его статус; постоянный рост или предпочтение записываются один раз и только при доказанном новом знании Ены. Отсутствие фактов в блоке — нормальный результат.`;
+ОБЪЕКТИВНЫЙ РЕЕСТР, НЕ ЖУРНАЛ СОБЫТИЙ: для gm:inventory, gm:body, gm:quests, gm:sidequests и salon:tasks/stock используй одинаковый entityKey при изменении одной и той же сущности. Поля: entityKey, entityLabel, action=create|update|resolve|transfer|lose|restore, entityStatus=active|planned|in_progress|completed|held|transferred|lost|healed|resolved|found. Если факт уже известен, НЕ повторяй его на каждое упоминание. Для свойств досье с тем же subject+attribute уточнение — update, но не создавай новую анкету; ранее установленное значение не переписывай без прямого нового основания. Повторное действие над предметом должно обновлять его статус; постоянное предпочтение записывается один раз; внешность персонажа из сцены не извлекай. Отсутствие фактов в блоке — нормальный результат.`;
     const known=existingEntityOptions(b.proposals,valid).slice(0,60);
     const pendingEntities=b.proposals.filter(p=>p.status==='pending'&&isStateScope(p.scope)&&entityKeyOf(p)&&valid(p)).slice(-25).map(p=>({key:entityKeyOf(p),scope:p.scope,label:p.entityLabel||p.title,state:p.entityStatus||p.progress||'не подтверждено'}));
     const entityContext=known.length||pendingEntities.length?'\nИЗВЕСТНЫЕ СУЩНОСТИ (подтверждённые и предложенные; не утверждай факт из ещё не подтверждённой записи): '+JSON.stringify([...known.map(x=>({key:x.id,scope:x.scope,label:x.label,state:x.state})),...pendingEntities]):'';
     const detailLevel=['focused','balanced','detailed'].includes(settings().enaSync.detailLevel)?settings().enaSync.detailLevel:'focused';
     const phase=settings().enaSync.extractionPhase==='updates'?'updates':'catalog';
     const extractionPolicy=phase==='catalog'?`
-ЭТАП ПЕРВИЧНОГО НАПОЛНЕНИЯ: собирай все РАЗНЫЕ подтверждённые полезные свойства и комплекты одежды. Не устанавливай лимит 2 факта на 10 сообщений: много сведений при первом знакомстве нормально. Внутри одной сцены группируй элементы одного комплекта и не дублируй свойства одного персонажа. Выдавай КОНКРЕТНОЕ subject и НАЗВАНИЕ ПОЛЯ attribute, а не отдельные анкеты для значений вроде «высокая». Внутренние типы gm:profiles и gm:wardrobe отображаются в ОДНОМ досье. Уже обнаруженное в списке ниже — пропускай, если не изменилось.`:`
-ЭТАП ТЕКУЩИХ ОБНОВЛЕНИЙ: не повторяй известные характеристики. Предлагай только действительно новые свойства, новые комплекты одежды либо подтверждённые изменения собственности, травм, задач, финансов и местонахождения. Нет новизны — верни пустой список.`;
-    const densityPolicy=detailLevel==='focused'?'НЕ добавляй проходные предметы, однократный приём пищи и детали без последующей справочной пользы.':detailLevel==='balanced'?'Фиксируй небольшие, но устойчивые свойства и конкретную одежду.':'Фиксируй все новые подтверждённые объективные детали, оставаясь без хроники.';
-    // Context is a dedupe hint, not canonical truth: pending data has not been approved.
-    const existingDetails=[...b.records.filter(r=>!r.deleted&&valid(r)&&['gm:profiles','gm:wardrobe'].includes(r.scope)).map(r=>({status:'approved',scope:r.scope,subject:r.subject,attribute:r.attribute,detail:r.detail})),
-      ...b.proposals.filter(r=>r.status==='pending'&&valid(r)&&['gm:profiles','gm:wardrobe'].includes(r.scope)).map(r=>({status:'pending',scope:r.scope,subject:r.subject,attribute:r.attribute,detail:r.detail}))].slice(-80).map(r=>({...r,detail:String(r.detail||'').slice(0,160)}));
-    const existingDetailsContext=existingDetails.length?'\nУЖЕ В СПРАВОЧНИКЕ / НА РАССМОТРЕНИИ (второе ещё не канон; не дублируй): '+JSON.stringify(existingDetails):'';
+ЭТАП ПЕРВИЧНОГО НАПОЛНЕНИЯ: собирай все разные подтверждённые полезные НЕ-ВНЕШНИЕ свойства, вещи, устойчивые факты и одежду. Числовой лимит для числа фактов не задан, но нулевой результат совершенно нормален. Не создавай повторов и не пиши общую хронику.`:`
+ЭТАП ОБНОВЛЕНИЙ: не повторяй известные поля. Предлагай только новые характеристики (не внешность), комплекты одежды либо фактически доказанные изменения собственности, травм, задач, финансов и мест.`;
+    const densityPolicy=detailLevel==='focused'?'Не фиксируй разовые продукты, движения и эмоции.':detailLevel==='balanced'?'Допускай небольшие, но устойчивые свойства и конкретную одежду.':'Фиксируй все новые полезные объективные детали без повторов.';
+    const existingDetails=compactExisting(b.records.filter(valid),b.proposals.filter(valid),portion.map(x=>x.text).join(' '),70);
+    const existingDetailsContext=existingDetails.length?'\nСУЩЕСТВУЮЩИЕ ЗАПИСИ, СРАВНИ ПЕРЕД СОЗДАНИЕМ (pending ещё не канон): '+JSON.stringify(existingDetails):'';
     const payload=portion.map((x,i)=>({id:'m'+i,index:x.index,key:x.key,speaker:x.speaker,text:x.text}));
     try{
-      const result=await requestAI(system+stateRules+entityContext+existingDetailsContext+extractionPolicy+'\n'+densityPolicy,'Составь объективный справочник известных Ене подтверждённых сведений; не извлекай хронику, контакты и отношения. Сообщения:\n'+JSON.stringify(payload));
+      const result=await requestAI(system+stateRules+entityContext+existingDetailsContext+extractionPolicy+'\n'+densityPolicy,'Обработай каждое сообщение целиком, сначала мысленно разложи информацию по категориям и сравни с записями, затем верни отдельные подтверждённые изменения в messages[].changes. НЕ собирай внешность из чата. Сообщения:\n'+JSON.stringify(payload));
       if(bag!==activeChatKey()){
         if(fullScanRunning){b.fullScan.lastError='Изменился идентификатор активного чата во время ответа модели';b.fullScan.failedStart=start;saveMeta();}
         toast('Чат изменился: проверка остановлена');return null;
@@ -582,8 +628,18 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
       const changes=parseExtraction(result);
       const assessment=assessChanges(changes,payload,b.proposals);
       const {candidates,skipped,decisions}=assessment;
-      const diagnostic={status:changes.length===0?'empty':candidates.length?'ok':'filtered',start,end,
-        extracted:changes.length,acceptable:candidates.length,added:dryRun?0:candidates.length,discarded:skipped,preview:dryRun?decisions.slice(0,30):[]};
+      const loreNew=firstEncounter(b.lorebookProfiles,portion,b.lorebookSeen);
+      const loreCandidates=loreNew.filter(l=>!b.proposals.some(p=>p.sourceType==='lorebook'&&p.subject===l.name))
+        .map(l=>({signature:digest('lorebook|'+l.name+'|'+l.appearance),scope:'gm:profiles',factType:'objective',
+          title:l.name+' · внешность (World Info)',detail:l.appearance,quote:'',sources:[],subject:l.name,
+          attribute:'Внешность (лорбук)',sourceType:'lorebook',sourceTitle:l.sourceTitle,
+          lifetime:'permanent',operation:'create',confidence:'worldinfo'}));
+      for(const proposed of loreCandidates){candidates.push(proposed);decisions.push({accepted:true,reason:'',scope:'gm:profiles',title:proposed.title,
+        subject:proposed.subject,attribute:proposed.attribute,detail:proposed.detail,quote:'',sourceType:'lorebook',evidenceMode:'World Info'});}
+      // Only mark a character as seen if it was actually proposed (not during diagnostic).
+
+      const diagnostic={status:candidates.length?'ok':changes.length===0?'empty':'filtered',start,end,
+        extracted:changes.length,fromLore:loreCandidates.length,acceptable:candidates.length,added:dryRun?0:candidates.length,discarded:skipped,preview:dryRun?decisions.slice(0,30):[]};
       b.scanDiagnostics=diagnostic;
       // A valid JSON with several rejected entries is NOT a successful extraction.
       // Preserve the cursor until the user can inspect why every candidate was dropped.
@@ -591,12 +647,13 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
       if(!dryRun&&fullScanRunning&&changes.length>0&&candidates.length===0&&rejectionCount>0){
         throw Error('Модель вернула '+changes.length+' фактов, но все отброшены проверкой. '+Object.entries(skipped).map(([k,v])=>k+': '+v).join('; '));
       }
-      if(dryRun){saveMeta();toast('Диагностика: модель предложила '+changes.length+', прошло проверку '+candidates.length);return {next:end,added:0};}
+      if(dryRun){saveMeta();toast('Диагностика: модель предложила '+changes.length+', из World Info '+loreCandidates.length+', допустимо '+candidates.length);return {next:end,added:0};}
       // Persistent zero on long RP data is suspicious: stop, do not mark another block as checked.
       // Objective reference mode can legitimately find no new stable facts for many consecutive scenes.
       // Do not treat an empty valid JSON as a failure.
       if(fullScanRunning)b.fullScan.emptyStreak=0;
       for(const candidate of candidates)b.proposals.push({id:key(),status:'pending',...candidate,created:dateTime()});
+      b.lorebookSeen.push(...loreCandidates.map(p=>p.subject));b.lorebookSeen=[...new Set(b.lorebookSeen)];
       const added=candidates.length;
       if(updateCursor)b.syncCursor=Math.max(b.syncCursor??0,end);
       b.syncRuns=(b.syncRuns||0)+1;

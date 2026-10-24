@@ -380,3 +380,9 @@
 #ena-desktop-root .ena-dossier-wardrobe-items button[data-beta="new-wardrobe"]{padding:7px 12px;border:2px solid;border-color:#fff #777 #777 #fff;background:#d4d2cc;color:#1d1d1d;cursor:pointer}
 #ena-desktop-root .ena-dossier-wardrobe-items .ena-beta-record{margin-bottom:7px}
 @media(max-width:700px){#ena-desktop-root .ena-dossier-field-row{grid-template-columns:1fr;gap:1px}#ena-desktop-root .ena-dossier-field-label{padding:4px 0 0}}
+/* Beta 5.10: compact navigation preserves every legacy GM tab in an expandable row. */
+#ena-desktop-root .ena-gm-compact-tabs{flex-wrap:wrap;min-height:35px;max-height:none !important;}
+#ena-desktop-root details.ena-gm-all-tabs{margin:0 0 4px;background:#dedbd4;border-bottom:1px solid #999;flex-shrink:0;}
+#ena-desktop-root details.ena-gm-all-tabs>summary{padding:5px 12px;font-size:12px;cursor:pointer;color:#1d3865;user-select:none;}
+#ena-desktop-root details.ena-gm-all-tabs>.ena-tabs{flex-wrap:wrap;max-height:150px;overflow-y:auto;}
+#ena-desktop-root details.ena-gm-all-tabs>summary:focus-visible{outline:2px solid #1d3865;outline-offset:-2px;}

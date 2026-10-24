@@ -14,7 +14,7 @@ assert.equal(meta.beta.scanDiagnostics.extracted,3);
 assert.equal(meta.beta.scanDiagnostics.acceptable,1);
 assert.deepEqual(meta.beta.scanDiagnostics.preview.map(v=>v.accepted),[true,false,false]);
 const ui=beta.view('gm');
-assert.match(ui,/Что именно предложила модель/);
+assert.match(ui,/Что предложено к проверке/);
 assert.match(ui,/Диск №1/);
 assert.match(ui,/Плохая категория/);
 assert.match(ui,/цитата не подтверждена/);

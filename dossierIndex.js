@@ -28,7 +28,14 @@ export function referenceAction(candidate, records=[], proposals=[]) {
   if(comparable.some(item=>contentKey(item.detail) === contentKey(candidate.detail))) return {type:'repeat'};
   if(candidate.scope==='gm:profiles') {
     const approved=comparable.filter(x=>x.status==='approved'||x.manual||x.proposalId);
-    if(approved.length) return {type:'update', previousId:approved[approved.length-1].id};
+    if(approved.length){
+      const last=approved[approved.length-1];
+      const prior=contentKey(last.detail),incoming=contentKey(candidate.detail);
+      // A genuinely different value is a conflict for human review, not a
+      // silent overwrite. A more detailed description is an ordinary update.
+      const refinement=prior.includes(incoming)||incoming.includes(prior);
+      return {type:refinement?'update':'conflict',previousId:last.id};
+    }
     if(comparable.length) return {type:'additional', reason:'другое значение свойства уже на рассмотрении'};
   }
   return {type:'create'};

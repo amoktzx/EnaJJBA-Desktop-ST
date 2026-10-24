@@ -88,6 +88,20 @@ export function parseExtraction(output){
   const begin=content.indexOf('{'),end=content.lastIndexOf('}');
   if(begin<0||end<=begin)throw Error('Модель не вернула JSON');
   const value=JSON.parse(content.slice(begin,end+1));
-  if(!value||!Array.isArray(value.changes))throw Error('В JSON нет массива changes');
-  return value.changes.slice(0,50);
+  if(!value||typeof value!=='object')throw Error('Ожидался JSON-объект');
+  // Beta 5.10: a staged per-message response; retain old flat changes compatibility.
+  let changes=[];
+  if(Array.isArray(value.messages)){
+    for(const group of value.messages){
+      if(!group||!/^m\d+$/.test(String(group.id||''))||!Array.isArray(group.changes))throw Error('Неверный блок messages');
+      for(const fact of group.changes){
+        if(!fact||typeof fact!=='object')throw Error('Факт в messages не является объектом');
+        // Preserve explicit multi-source IDs, but bind facts to the current message by default.
+        changes.push({...fact,message_ids:fact.message_ids||[group.id]});
+      }
+    }
+  }else if(Array.isArray(value.changes))changes=value.changes;
+  else throw Error('В JSON нет массива messages или changes');
+  if(changes.length>150)throw Error('Ответ содержит больше 150 отдельных фактов; сократи блок сообщений');
+  return changes;
 }
