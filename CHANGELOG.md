@@ -29,3 +29,9 @@
 - Error cause chain is shown when `ConnectionManagerRequestService` reports a wrapped API error.
 - Added 900 ms breathing room between successful requests.
 - All journal statuses, imported records, and archive data remain unchanged.
+
+## v1.0.0-beta.5.1 — GLM GM Extractor
+- Встроен отдельный строгий русский промпт для извлечения фактов (не ролевая генерация).
+- Усилена проверка достоверности источников, знаний NPC, типологии носителей, завершения задач и личных/салонных покупок.
+- Лимит ответа отдельного GM профиля увеличен с 3072 до 6144 токенов; это верхняя граница, а не фиксированный расход.
+- Сохраняет логику возобновления Beta 5, журнал, все текущие записи и статусы.
