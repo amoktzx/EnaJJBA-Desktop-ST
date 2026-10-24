@@ -295,3 +295,22 @@
 #ena-desktop-root .ena-beta-proposal-actions button[disabled]{opacity:.48}
 #ena-desktop-root .ena-beta-controls button{cursor:pointer;white-space:normal;min-height:31px}
 @media(max-width:650px){#ena-desktop-root .ena-fact-status-tabs button{flex:1 1 43%;font-size:12px}}
+
+/* Beta 5.4: readable Windows-2000 diagnostics. Override host theme's light `small` styling. */
+#ena-desktop-root .ena-beta-warning,
+#ena-desktop-root .ena-beta-warning p,
+#ena-desktop-root .ena-beta-warning small,
+#ena-desktop-root .ena-beta-warning b,
+#ena-desktop-root .ena-beta-warning .ena-source-inspect,
+#ena-desktop-root .ena-beta-warning .ena-source-inspect small,
+#ena-desktop-root .ena-beta-warning .ena-source-inspect p,
+#ena-desktop-root .ena-beta-warning .ena-source-inspect b {
+ color:#2d2927 !important;
+ opacity:1 !important;
+ text-shadow:none !important;
+}
+#ena-desktop-root .ena-beta-warning {background:#f3e1d3 !important;border-left:4px solid #a95430;padding:12px 13px;}
+#ena-desktop-root .ena-beta-warning .ena-source-inspect {background:#eeeae1;border:1px solid #9a8f81 !important;margin-top:11px !important;padding:12px !important;}
+#ena-desktop-root .ena-beta-warning .ena-source-inspect small {display:block;font-size:12px;line-height:1.65;overflow-wrap:anywhere;padding:6px 8px;margin:5px 0;background:#faf8f2;border:1px solid #d0c7b9;}
+#ena-desktop-root .ena-beta-warning .ena-source-inspect hr{display:none;}
+#ena-desktop-root .ena-legacy-scan-warning {margin:10px 0;background:#fff0d3 !important;border-left-color:#99531c;font-size:13px;line-height:1.55;}

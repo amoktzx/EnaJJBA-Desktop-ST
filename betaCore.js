@@ -27,17 +27,34 @@ export function messageText(message){
   }
   return '';
 }
-export function messageKey(message){
-  if(!message || message.is_system===true) return '';
+// Imported SillyTavern conversations may mark *every* ordinary roleplay
+// message is_system=true.  A real system notice has a system role/name/type,
+// or lacks a recognizable actor. Keep the flag visible in diagnostics, but
+// do not discard a named user/assistant message solely because of it.
+export function isRoleplayMessage(message){
   const text=messageText(message);
-  if(!text.trim())return '';
+  if(!text.trim())return false;
+  if(!message || typeof message!=='object')return typeof message==='string';
+  if(message.role==='system' || message.type==='system' || message.extra?.type==='system' || message.extra?.is_system===true)return false;
+  const name=String(message.name??'').trim();
+  if(/^(?:system|system prompt|sillytavern|система|системное сообщение)(?:\s|$|:)/i.test(name))return false;
+  if(message.is_system===true){
+    // Both are present in the user's imported JJBA chat, including its
+    // narrator: name + explicit actor flag. Do not guess on anonymous notices.
+    return Boolean(name && typeof message.is_user==='boolean');
+  }
+  return true;
+}
+export function messageKey(message){
+  if(!isRoleplayMessage(message)) return '';
+  const text=messageText(message);
   return digest([message.send_date??'',message.is_user?'user':'assistant',text,message.swipe_id??''].join('\u241f'));
 }
 export function messageSourceStats(chat,start=0,limit=10){
   const list=Array.isArray(chat)?chat:[];
   const section=list.slice(start,start+limit);
   const result={start,end:Math.min(list.length,start+limit),total:list.length,entries:section.length,
-    system:0,text:0,empty:0,mes:0,fallback:0,swipes:0,other:0,
+    system:0,flaggedSystem:0,recoveredSystem:0,text:0,empty:0,mes:0,fallback:0,swipes:0,other:0,
     samples:[]};
   for(let i=0;i<section.length;i++){
     const m=section[i];
@@ -45,9 +62,11 @@ export function messageSourceStats(chat,start=0,limit=10){
     if(!isObj){result.other++;if(result.samples.length<3)result.samples.push({index:start+i+1,type:typeof m,keys:[],is_system:false,length:typeof m==='string'?m.length:0});continue;}
     const keys=Object.keys(m);
     const system=m.is_system===true;
-    if(system)result.system++;
-    const text=messageText(m);
-    if(text.trim()&&!system){result.text++;if(typeof m.mes==='string'&&m.mes.trim())result.mes++;else result.fallback++;}
+    if(system)result.flaggedSystem++;
+    const text=messageText(m), readable=isRoleplayMessage(m);
+    if(system&&readable)result.recoveredSystem++;
+    if(system&&!readable)result.system++;
+    if(readable){result.text++;if(typeof m.mes==='string'&&m.mes.trim())result.mes++;else result.fallback++;}
     else result.empty++;
     if(Array.isArray(m.swipes)&&m.swipes.length)result.swipes++;
     if(result.samples.length<3)result.samples.push({index:start+i+1,type:'object',keys:keys.slice(0,12),is_system:system,length:text.length,

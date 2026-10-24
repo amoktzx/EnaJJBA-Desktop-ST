@@ -43,3 +43,11 @@
 
 ## Beta 5.3 — Chat read diagnostics
 - Non-billable source-field introspection, alternative text fields, no empty-block cursor advancement.
+
+## 1.0.0-beta.5.4 — imported RP messages and contrast
+- Fixed imported SillyTavern roleplay lines marked `is_system=true` even when named player/narrator with `is_user` role and real `mes` text.
+- True system notices remain excluded by role/type/name/anonymous service flags. Source hashing and rollback evidence use identical logic.
+- Local diagnostics now distinguish flagged as system vs genuinely excluded vs restored RP messages.
+- Resuming a legacy full-scan cursor is blocked when it had unreadable imported RP; a fresh pass starts only when the user explicitly requests it, preserving old proposals/decisions.
+- Improved contrast of diagnostic `small` text, labels, and sample details under host SillyTavern CSS.
+- Added integration regression for 100/100 mislabelled imported messages and real system-message exclusion.
