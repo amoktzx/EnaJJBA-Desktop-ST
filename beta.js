@@ -174,7 +174,8 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     const progress=f.total?Math.min(100,Math.round((f.cursor||0)/f.total*100)):0;
     const work=fullScanRunning?`<button data-beta="scan-stop" type="button">■ Остановить после текущего блока</button>`:
        `<button data-beta="scan-all" type="button">Проверить весь чат (${c.length} сообщений)</button>${f.cursor>0&&f.cursor<f.total?'<button data-beta="scan-resume" type="button">▶ Продолжить полную проверку</button>':''}`;
-    const progressBar=f.total?`<div class="ena-scan-progress" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"><span style="width:${progress}%"></span></div><p>Полный проход: ${f.cursor||0} / ${f.total||0} сообщений · ${progress}% · блоков ${f.blocks||0} · новых предложений ${f.added||0} · ${encode(f.status||'')}</p>`:'';
+    const reason=f.lastError?`<div class="ena-beta-warning ena-fullscan-error" role="alert"><b>Почему проверка остановилась:</b> ${encode(f.lastError)}<br><small>Блок с позиции #${Number(f.failedStart??f.cursor)+1}. Завершённые блоки сохранены. ${f.chunkSize?`Размер следующей порции: ${f.chunkSize} сообщений.`:''} Если причина связана с API/лимитом, не нажимай «Продолжить» многократно.</small></div>`:'';
+    const progressBar=f.total?`<div class="ena-scan-progress" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"><span style="width:${progress}%"></span></div><p>Полный проход: ${f.cursor||0} / ${f.total||0} сообщений · ${progress}% · блоков ${f.blocks||0} · новых предложений ${f.added||0} · ${encode(f.status||'')} · размер порции: ${Number(f.chunkSize)||Number(s.interval)||50}</p>${reason}`:'';
     return `<div class="ena-content ena-scroll ena-beta-space"><div class="ena-beta-banner"><b>Источник ИИ: ${encode(selectedProviderLabel())}</b><p>Выбранный профиль GM не переключает модель рассказчика. Результаты записываются только после твоего подтверждения.</p>${profileSelect()}<p>Обработано блоков: ${b.syncRuns||0}; сообщений в чате: ${c.length}; текущая позиция: ${b.syncCursor===null?'ещё не задана':b.syncCursor}.</p></div>
       <div class="ena-beta-controls"><button data-beta="scan-last" ${extracting?'disabled':''}>Последние ${Number(s.interval||50)} сообщений</button><button data-beta="scan-new" ${extracting?'disabled':''}>Новые сообщения</button>${work}<button data-beta="export">⬇ Полный экспорт JSON</button><button type="button" data-beta="choose-import">⬆ Импорт JSON</button><input class="ena-beta-file-hidden" data-beta-input="import" type="file" accept="application/json,.json"></div>
       <div class="ena-beta-notice">Полная проверка выполняется порциями по ${Number(s.interval)||50} сообщений через выбранный API-профиль. Каждая порция — отдельный платный запрос; можно остановить и возобновить. Принятые, на рассмотрении и отклонённые предложения блокируют повторное появление по тому же источнику и цитате. Удалённые — не блокируют. Импорт/экспорт включает ВСЮ базу со статусами и историей.</div>${progressBar}
@@ -339,10 +340,27 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     p.year=record.year||'';p.progress=record.progress||'';
     p.owned=record.ownership==='personal';saveMeta();
   }
-  function activeChatKey(){return ctx()?.chatMetadata || null;}
+  function activeChatKey(){
+    const c=ctx();
+    // Prefer a stable chat ID: SillyTavern can replace chatMetadata object on saves.
+    if(c?.chatId!==undefined&&c?.chatId!==null&&String(c.chatId)!=='')
+      return `${c.groupId||''}:${c.characterId??''}:${String(c.chatId)}`;
+    return c?.chatMetadata||null;
+  }
+  function describeError(err){
+    const parts=[];
+    for(let e=err,n=0;e&&n<4;n++,e=e.cause){
+      const msg=String(e.message||e).trim();
+      if(msg&&!parts.includes(msg))parts.push(msg);
+    }
+    return (parts.join(' → ')||'Неизвестная ошибка').slice(0,700);
+  }
+  function canRetrySmaller(reason){
+    return /(?:JSON|Unexpected (?:token|end)|SyntaxError|context|контекст|token limit|too many tokens|maximum.*token|request too large|413|length exceeded|нет массива changes|не вернула JSON)/i.test(String(reason||''));
+  }
   // A single sequential chunk. Returns null on failure / chat switch, and never
   // silently skips a failed chunk. Full-chat mode stores its own resumable cursor.
-  async function scanChunk(start, limit, {updateCursor=true}={}){
+    async function scanChunk(start, limit, {updateCursor=true}={}){ 
     if(extracting)return null;
     const c=ctx();if(!c){toast('SillyTavern недоступна');return null;}
     const bag=activeChatKey(),b=state(),chat=messages(),end=Math.min(chat.length,start+limit);
@@ -355,7 +373,10 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     const payload=portion.map((x,i)=>({id:'m'+i,index:x.index,key:x.key,speaker:x.speaker,text:x.text}));
     try{
       const result=await requestAI(system,'Извлеки только факты из сообщений:\n'+JSON.stringify(payload));
-      if(bag!==activeChatKey()){toast('Чат изменился: проверка остановлена');return null;}
+      if(bag!==activeChatKey()){
+        if(fullScanRunning){b.fullScan.lastError='Изменился идентификатор активного чата во время ответа модели';b.fullScan.failedStart=start;saveMeta();}
+        toast('Чат изменился: проверка остановлена');return null;
+      }
       const changes=parseExtraction(result);let added=0;
       for(const change of changes){if(!SCOPE_KEYS.includes(change.scope))continue;const ids=Array.isArray(change.message_ids)?change.message_ids:[];
         const sources=ids.map(id=>payload[Number(String(id).replace(/^m/,''))]).filter(Boolean);
@@ -370,9 +391,15 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
       }
       if(updateCursor)b.syncCursor=Math.max(b.syncCursor??0,end);
       b.syncRuns=(b.syncRuns||0)+1;
+      if(fullScanRunning){b.fullScan.lastError='';b.fullScan.failedStart=null;}
       queueHistory(`Проверены сообщения ${start}–${end-1}, предложено ${added} изменений`);
       return {next:end,added};
-    }catch(e){console.error('[EnaDesktop] AI sync error',e);toast('Ошибка ИИ: '+(e?.message||'проверяй консоль'));return null;}
+    }catch(e){
+      const explanation=describeError(e);
+      console.error('[EnaDesktop] AI sync error',e);
+      if(fullScanRunning){b.fullScan.lastError=explanation;b.fullScan.failedStart=start;saveMeta();}
+      toast('Ошибка ИИ: '+explanation.slice(0,180));return null;
+    }
     finally{extracting=false;if(ui.windows.has('gm'))fillWindow('gm');}
   }
   async function scan(recent){if(fullScanRunning||extracting){toast('Проверка уже идёт');return;}
@@ -389,26 +416,46 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     const saved=b.fullScan||{},canResume=resume&&saved.cursor>0&&saved.cursor<saved.total;
     const start=canResume?saved.cursor:0,total=canResume?Math.min(saved.total,chat.length):chat.length;
     if(!canResume){const chunks=Math.ceil(total/interval);if(!confirm(`Проверить ${total} сообщений порциями по ${interval}? Это до ${chunks} запросов через «${selectedProviderLabel()}» и может расходовать платные токены. Результаты будут предложениями, не автоматическими фактами.`))return;}
-    if(!canResume)b.fullScan={cursor:0,total,status:'running',added:0,blocks:0};
+    if(!canResume)b.fullScan={cursor:0,total,status:'running',added:0,blocks:0,chunkSize:interval,lastError:'',failedStart:null};
     else b.fullScan.status='running';
     fullScanStop=false;fullScanRunning=true;const bag=activeChatKey();saveMeta();
     try{
       for(let i=start;i<total;){
-        if(fullScanStop||bag!==activeChatKey()){b.fullScan.status='paused';break;}
-        const result=await scanChunk(i,Math.min(interval,total-i),{updateCursor:false});
-        if(!result){b.fullScan.status='paused';break;}
+        if(fullScanStop||bag!==activeChatKey()){
+          b.fullScan.status='paused';
+          b.fullScan.lastError=fullScanStop?'Остановлено пользователем после завершённого блока':'Активный чат изменился';
+          b.fullScan.failedStart=i;saveMeta();break;
+        }
+        const size=Math.max(8,Math.min(interval,Number(b.fullScan.chunkSize)||interval,total-i));
+        const result=await scanChunk(i,size,{updateCursor:false});
+        if(!result){
+          // Reduce ONLY when the problem is response format / context length;
+          // never automatically retry 429, auth or other paid/network failures.
+          if(!fullScanStop&&bag===activeChatKey()&&size>8&&canRetrySmaller(b.fullScan.lastError)){
+            const smaller=Math.max(8,Math.floor(size/2));
+            b.fullScan.chunkSize=smaller;
+            queueHistory(`Сложный блок ${i}–${i+size-1}: повтор с меньшей порцией (${smaller})`);
+            b.fullScan.status='running';saveMeta();
+            if(ui.windows.has('gm'))fillWindow('gm');
+            continue;
+          }
+          b.fullScan.status='paused';saveMeta();break;
+        }
         i=result.next;
         b.fullScan.cursor=i;b.fullScan.added+=result.added;b.fullScan.blocks++;
         b.fullScan.status=i>=total?'complete':'running';
         saveMeta();if(ui.windows.has('gm'))fillWindow('gm');
-        // Yield to the browser so the stop button remains responsive between API calls.
-        await new Promise(resolve=>setTimeout(resolve,70));
+        await new Promise(resolve=>setTimeout(resolve,900));
       }
       if(bag===activeChatKey()&&b.fullScan.cursor>=total){
-        b.fullScan.status='complete';b.syncCursor=Math.max(b.syncCursor??0,total);
+        b.fullScan.status='complete';b.fullScan.lastError='';b.fullScan.failedStart=null;
+        b.syncCursor=Math.max(b.syncCursor??0,total);
         queueHistory('Полная проверка завершена: '+total+' сообщений, '+b.fullScan.added+' новых предложений');
         toast('Полная проверка завершена! Предложений: '+b.fullScan.added);
-      }else if(bag===activeChatKey()){queueHistory('Полная проверка приостановлена на сообщении '+b.fullScan.cursor);toast('Полная проверка приостановлена');}
+      }else if(bag===activeChatKey()){
+        queueHistory('Полная проверка приостановлена на сообщении '+b.fullScan.cursor+ (b.fullScan.lastError?' · '+b.fullScan.lastError.slice(0,100):''));
+        toast('Проверка приостановлена: смотри причину в GM → Синхронизация');
+      }
     }finally{fullScanRunning=false;fullScanStop=false;if(ui.windows.has('gm'))fillWindow('gm');}
   }
   function updateEvents(){clearTimeout(pendingTimer);pendingTimer=setTimeout(()=>{const bag=activeChatKey();if(!bag)return;markInvalid();const b=state(),count=messages().length;

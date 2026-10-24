@@ -20,3 +20,12 @@
 - Не редактируй ключи `sources[].key` и идентификаторы `id` во внешнем JSON без явной необходимости.
 - Нельзя считать восстановление объективной истины из AI 100% надёжным; факты по-прежнему утверждает игрок.
 - Отдельные API-профили SillyTavern сохранены из Beta 3; настоящие платные запросы проверяются пользователем на его сервере.
+
+## v1.0.0-beta.5 — Resume diagnostics
+- GM now shows a persistent reason if full-chat analysis is paused, and the exact failed source-message position.
+- Resume keeps `fullScan.cursor` instead of clearing prior results.
+- Improved chat-switch detection using stable `chatId`, avoiding spurious false pauses on metadata reference changes.
+- Invalid/missing JSON or oversized context can trigger adaptive chunking (50 → 25 → 12 → 8), but quota/auth/API failures DO NOT auto-retry.
+- Error cause chain is shown when `ConnectionManagerRequestService` reports a wrapped API error.
+- Added 900 ms breathing room between successful requests.
+- All journal statuses, imported records, and archive data remain unchanged.
