@@ -34,7 +34,7 @@ function sample({prompt}){
   const h=build({respond:()=>JSON.stringify({changes:[{scope:'gm:inventory',factType:'objective',title:'Ключ',detail:'У Ены',message_ids:['m0'],quote:'несуществующая цитата',confidence:'high'}]})});
   h.click('scan-diagnose-early');
   await until(()=>h.beta.state().scanDiagnostics.status==='filtered');
-  assert.equal(h.beta.state().scanDiagnostics.discarded['цитата не найдена'],1);
+  assert.equal(h.beta.state().scanDiagnostics.discarded['цитата не подтверждена (включая сокращённые фрагменты)'],1);
   assert.equal(h.beta.state().proposals.length,0);
   console.log('Unmatched literal citations are explained: PASS');
 }

@@ -361,3 +361,8 @@
 #ena-desktop-root .ena-diagnostic-card[open]>summary{background:#d8e2ed;}
 #ena-desktop-root .ena-diagnostic-body{padding:8px 10px;background:#faf9f5;}
 #ena-desktop-root .ena-diagnostic-body blockquote{margin:5px 0;overflow-wrap:anywhere;}
+/* Beta 5.8: grouped dossiers and clothes, retaining Win2000 layout */
+.ena-dossier-group{margin:8px 0;border:1px solid #aaa;background:#eceae5;padding:0}
+.ena-dossier-group>summary{cursor:pointer;padding:9px 12px;background:#d4ddec;color:#182e52;box-shadow:inset 1px 1px #f8fafc}
+.ena-dossier-fields{padding:8px 10px}
+.ena-dossier-fields .ena-beta-record{margin-bottom:7px}

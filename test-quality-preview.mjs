@@ -17,7 +17,7 @@ const ui=beta.view('gm');
 assert.match(ui,/Что именно предложила модель/);
 assert.match(ui,/Диск №1/);
 assert.match(ui,/Плохая категория/);
-assert.match(ui,/цитата не найдена/);
+assert.match(ui,/цитата не подтверждена/);
 assert.equal(meta.beta.proposals.length,0);
 assert.equal(meta.beta.fullScan.cursor,0);
 console.log('Quality preview: accepted/rejected cards and no mutation PASSED');

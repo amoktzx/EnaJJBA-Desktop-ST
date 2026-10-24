@@ -1,3 +1,11 @@
+## Beta 5.8 — Objective Wardrobe & Narrative Evidence
+
+- GM → Гардероб (группировка одежды/комплектов по персонажам).
+- Авторское описание физических свойств — допустимый источник; сокращённая цитата с `...` проверяется в рамках одного сообщения.
+- Досье группируется по персонажу; исправлены дубликаты разных свойств с одной цитатой.
+- Первичное наполнение и обновления разделены; нет искусственного лимита двух фактов.
+- Ручное изменение принадлежности записи; старый JSON сохраняется.
+
 ## Beta 5.7 — Objective Notebook & Foldable Panels
 
 - GM extraction is restricted to facts about character profiles, equipment, visible body states, finance, documents, and physical-world data actually available to Ena.

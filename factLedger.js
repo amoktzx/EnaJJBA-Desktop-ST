@@ -13,10 +13,21 @@ export function identityKeys(proposal) {
   const kind=String(proposal.factType||'objective');
   const anchor=identityText(proposal.quote);
   // Older imported suggestions may lack a quote, so the normalized title is a fallback.
-  const discriminator=anchor?'quote:'+anchor:'legacy-title:'+identityText(proposal.title);
+  // In a character dossier one narration sentence can confirm several properties:
+  // e.g. hair AND eye color. Quote-only dedupe would silently discard one.
+  const property=['gm:profiles','gm:wardrobe'].includes(scope)
+    ?'|subject:'+identityText(proposal.subject)+'|attribute:'+identityText(proposal.attribute):'';
+  const discriminator=(anchor?'quote:'+anchor:'legacy-title:'+identityText(proposal.title))+property;
   return keys.map(key=>digest(['fact-v2',key,scope,kind,discriminator].join('\u241f')));
 }
 export function sameProposedFact(a,b) {
+  // A single source/quote may support distinct properties of the same person.
+  // Distinguish them before testing nested/identical quote anchors.
+  if(a?.scope===b?.scope&&['gm:profiles','gm:wardrobe'].includes(a?.scope)){
+    const aProperty=identityText(a?.subject)+'|'+identityText(a?.attribute);
+    const bProperty=identityText(b?.subject)+'|'+identityText(b?.attribute);
+    if(aProperty!=='|'&&bProperty!=='|'&&aProperty!==bProperty)return false;
+  }
   const aKeys=identityKeys(a),bKeys=new Set(identityKeys(b));
   if(aKeys.some(k=>bKeys.has(k)))return true;
   // An extractor may choose a slightly longer excerpt on the next run. Only

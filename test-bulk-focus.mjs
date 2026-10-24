@@ -33,6 +33,6 @@ click('bulk-select-everything');click('bulk-purge');assert.equal(state.proposals
 assert.equal(validateFullSnapshot(exportFullSnapshot(meta,chat.map(messageKey))).data.beta.records.length,1);
 // Focused extraction affects prompt only; doesn't auto-save when dry-run.
 click('scan-diagnose-early');await new Promise(r=>setTimeout(r,80));
-assert.match(systemPrompt,/СТРОГИЙ РЕЖИМ СПРАВОЧНИКА/);assert.match(systemPrompt,/Ни одной записи о контактах/);assert.equal(beta.state().proposals.length,0);assert.equal(beta.state().scanDiagnostics.status,'ok');
+assert.match(systemPrompt,/ЭТАП ПЕРВИЧНОГО НАПОЛНЕНИЯ/);assert.match(systemPrompt,/НЕ НУЖНО: хроника/);assert.equal(beta.state().proposals.length,0);assert.equal(beta.state().scanDiagnostics.status,'ok');
 assert.ok(saves>=4);
 console.log('Beta 5.5: error reset, multi-selection, soft delete, permanent purge, manual protection, cursor reset, focused model prompt, dry-run, export-import PASSED');
