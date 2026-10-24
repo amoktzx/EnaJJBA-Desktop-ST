@@ -51,3 +51,9 @@
 - Resuming a legacy full-scan cursor is blocked when it had unreadable imported RP; a fresh pass starts only when the user explicitly requests it, preserving old proposals/decisions.
 - Improved contrast of diagnostic `small` text, labels, and sample details under host SillyTavern CSS.
 - Added integration regression for 100/100 mislabelled imported messages and real system-message exclusion.
+
+
+## Beta 5.5 — массовые действия и строгий отбор
+- Кнопки очистки ошибок и сброса прогресса разделены и не удаляют факты.
+- Массовый выбор во вкладках фактов, мягкое и окончательное удаление с подтверждением.
+- Настройка подробности GM: значимые изменения (по умолчанию), умеренно, подробно.

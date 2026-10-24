@@ -314,3 +314,15 @@
 #ena-desktop-root .ena-beta-warning .ena-source-inspect small {display:block;font-size:12px;line-height:1.65;overflow-wrap:anywhere;padding:6px 8px;margin:5px 0;background:#faf8f2;border:1px solid #d0c7b9;}
 #ena-desktop-root .ena-beta-warning .ena-source-inspect hr{display:none;}
 #ena-desktop-root .ena-legacy-scan-warning {margin:10px 0;background:#fff0d3 !important;border-left-color:#99531c;font-size:13px;line-height:1.55;}
+
+/* Beta 5.5 — bulk fact management, accessible Win2000 UI. */
+#ena-desktop-root .ena-bulk-tools,#ena-desktop-root .ena-scan-maintenance{background:#e9e6e0;border:1px solid #9c9993;padding:10px 12px;margin:10px 0;color:#242424;}
+#ena-desktop-root .ena-bulk-tools b,#ena-desktop-root .ena-scan-maintenance b{color:#233b62;}
+#ena-desktop-root .ena-bulk-tools p,#ena-desktop-root .ena-scan-maintenance p{margin:5px 0;color:#353535;}
+#ena-desktop-root .ena-bulk-tools small,#ena-desktop-root .ena-scan-maintenance small{display:block;color:#484848;line-height:1.5;}
+#ena-desktop-root .ena-bulk-buttons{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;}
+#ena-desktop-root .ena-bulk-buttons button{background:#dad7cf;border:2px solid;border-color:#fff #777 #777 #fff;padding:6px 9px;min-height:30px;color:#1e1e1e;cursor:pointer;}
+#ena-desktop-root .ena-bulk-buttons button:disabled{cursor:default;opacity:.55;}
+#ena-desktop-root .ena-proposal-select{display:inline-flex;align-items:center;gap:6px;margin:0 0 8px;cursor:pointer;font-size:12px;color:#253959;}
+#ena-desktop-root .ena-proposal-select input{width:16px;height:16px;accent-color:#203d78;}
+#ena-desktop-root .ena-beta-space select[data-beta-setting="detailLevel"]{max-width:100%;width:100%;}
