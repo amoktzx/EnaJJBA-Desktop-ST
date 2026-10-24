@@ -19,7 +19,7 @@ const beta=createBeta({meta:()=>meta,ctx:()=>ctx,settings:()=>settings,persistSe
 const click=(type,id='',value='')=>beta.action(type,{closest:()=>({}),dataset:{id,value}});
 globalThis.confirm=()=>true;
 assert.match(beta.view('gm'),/Массовые действия/);assert.match(beta.view('gm'),/Удалить выбранные навсегда/);
-assert.match(beta.view('gm'),/Только значимые изменения/);
+assert.match(beta.view('gm'),/Строго: факты справочника/);
 // Clearing errors doesn't touch cursors and statuses.
 click('clear-scan-errors');assert.equal(state.fullScan.cursor,11);assert.equal(state.fullScan.lastError,'');assert.equal(state.scanDiagnostics.status,'idle');assert.equal(state.history.length,1);assert.equal(state.proposals.length,4);
 // Selecting just the two initial statuses and soft-deleting leaves manual records.
@@ -33,6 +33,6 @@ click('bulk-select-everything');click('bulk-purge');assert.equal(state.proposals
 assert.equal(validateFullSnapshot(exportFullSnapshot(meta,chat.map(messageKey))).data.beta.records.length,1);
 // Focused extraction affects prompt only; doesn't auto-save when dry-run.
 click('scan-diagnose-early');await new Promise(r=>setTimeout(r,80));
-assert.match(systemPrompt,/РЕЖИМ СТРОГОЙ СЕЛЕКЦИИ/);assert.match(systemPrompt,/НЕ записывай каждый жест/);assert.equal(beta.state().proposals.length,0);assert.equal(beta.state().scanDiagnostics.status,'ok');
+assert.match(systemPrompt,/СТРОГИЙ РЕЖИМ СПРАВОЧНИКА/);assert.match(systemPrompt,/Ни одной записи о контактах/);assert.equal(beta.state().proposals.length,0);assert.equal(beta.state().scanDiagnostics.status,'ok');
 assert.ok(saves>=4);
 console.log('Beta 5.5: error reset, multi-selection, soft delete, permanent purge, manual protection, cursor reset, focused model prompt, dry-run, export-import PASSED');

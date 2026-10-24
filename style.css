@@ -338,3 +338,26 @@
 #ena-desktop-root .ena-entity-hint{display:block;color:#3d526c!important;margin:4px 0!important;}
 #ena-desktop-root .ena-beta-fact-edit{color:#242831;}
 #ena-desktop-root .ena-beta-fact-edit>p{margin:5px 0;line-height:1.35;color:#454a55;}
+
+/* Beta 5.7 — compact, independently collapsible Win2000 panels. */
+#ena-desktop-root details.ena-fold-section{border:1px solid #888780;background:#e9e7e1;margin:8px 0 11px;box-shadow:inset 1px 1px #fff;color:#242424;}
+#ena-desktop-root details.ena-fold-section>summary{display:list-item;list-style-position:inside;cursor:pointer;padding:9px 12px;font-size:13px;font-weight:bold;background:#d7d5cf;border-bottom:1px solid transparent;color:#20365b;user-select:none;}
+#ena-desktop-root details.ena-fold-section[open]>summary{border-bottom-color:#918e87;background:#cfd8e6;}
+#ena-desktop-root details.ena-fold-section>summary:hover{background:#c5d2e5;}
+#ena-desktop-root details.ena-fold-section>summary:focus-visible{outline:2px solid #204b88;outline-offset:-2px;}
+#ena-desktop-root details.ena-fold-section>.ena-fold-body{padding:7px 10px 10px;min-width:0;}
+#ena-desktop-root details.ena-fold-section .ena-beta-warning{overflow-wrap:anywhere;}
+#ena-desktop-root details.ena-fold-section .ena-beta-proposal{margin-bottom:10px;}
+#ena-desktop-root details.ena-fold-section .ena-fact-badge{max-width:100%;}
+
+#ena-desktop-root .ena-proposal-compact{padding:7px 9px 10px;margin:8px 0;}
+#ena-desktop-root .ena-proposal-compact .ena-proposal-select{margin:2px 4px 4px;}
+#ena-desktop-root .ena-proposal-fold>summary{cursor:pointer;padding:9px;background:#e0e4ec;border:1px solid #8b919d;color:#20345c;overflow-wrap:anywhere;}
+#ena-desktop-root .ena-proposal-fold>summary small{display:block;margin-top:3px;font-size:11px;font-weight:normal;color:#445776;}
+#ena-desktop-root .ena-proposal-fold[open]>summary{background:#cad5e7;}
+#ena-desktop-root .ena-proposal-fold-body{padding:7px 7px 0;}
+#ena-desktop-root .ena-diagnostic-card{border:1px solid #b6b2a8;margin:7px 0;background:#eeeae3;}
+#ena-desktop-root .ena-diagnostic-card>summary{padding:9px 10px;cursor:pointer;font-weight:bold;overflow-wrap:anywhere;color:#3b444e;}
+#ena-desktop-root .ena-diagnostic-card[open]>summary{background:#d8e2ed;}
+#ena-desktop-root .ena-diagnostic-body{padding:8px 10px;background:#faf9f5;}
+#ena-desktop-root .ena-diagnostic-body blockquote{margin:5px 0;overflow-wrap:anywhere;}

@@ -1,3 +1,12 @@
+## Beta 5.7 — Objective Notebook & Foldable Panels
+
+- GM extraction is restricted to facts about character profiles, equipment, visible body states, finance, documents, and physical-world data actually available to Ena.
+- New GM dossier tab for stable character attributes (height, eye color, known weapon model, favorite foods, etc.).
+- Model categories for relationship scenes, event recaps, SMS and subjective thoughts are rejected from automatic proposals; legacy data remains viewable and editable.
+- Sync interface: independent collapsible options, scan controls, diagnostics, maintenance, bulk actions, fact list, rollback notices and log. Each proposal and diagnostic example has its own foldable details.
+- Valid empty extraction results no longer halt full scans.
+- Fully retained v2 JSON import/export, optional human review, state history, and old controls.
+
 ## v1.0.0-beta.5.2 — GM extraction diagnostics
 - Per-batch raw/extracted/filtered counts and reason categories; safe dry run without cursor advance.
 - Guard against silently marking failed/empty extraction as successful.

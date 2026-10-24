@@ -41,11 +41,11 @@ function sample({prompt}){
 {
  const h=build({count:100,respond:()=>'{"changes":[]}',fullScanState:{cursor:0,total:0,status:'idle',added:0,blocks:0}});
  h.click('scan-all');
- await until(()=>h.beta.state().fullScan.status==='paused');
- assert.equal(h.beta.state().fullScan.cursor,50);
- assert.match(h.beta.state().fullScan.lastError,/пустой changes/);
+ await until(()=>h.beta.state().fullScan.status==='complete');
+ assert.equal(h.beta.state().fullScan.cursor,100);
+ assert.equal(h.beta.state().fullScan.lastError,'');
  assert.equal(h.beta.state().proposals.length,0);
- console.log('Consecutive suspicious empty blocks cannot silently advance: PASS');
+ console.log('Consecutive empty blocks are valid in an objective diary: PASS');
 }
 {
  const h=build({respond:()=>{throw new Error('API request failed → Bad Request')}});
