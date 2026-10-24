@@ -366,3 +366,17 @@
 .ena-dossier-group>summary{cursor:pointer;padding:9px 12px;background:#d4ddec;color:#182e52;box-shadow:inset 1px 1px #f8fafc}
 .ena-dossier-fields{padding:8px 10px}
 .ena-dossier-fields .ena-beta-record{margin-bottom:7px}
+/* Beta 5.9 — Garment list as a single collapsible row inside a character dossier. */
+#ena-desktop-root .ena-dossier-field-row{display:grid;grid-template-columns:minmax(95px,24%) minmax(0,1fr);gap:9px;padding:7px 0;border-bottom:1px dotted #aaa8a1;align-items:start}
+#ena-desktop-root .ena-dossier-field-label{font-weight:bold;color:#293b59;padding:10px 5px 0}
+#ena-desktop-root .ena-dossier-field-content{min-width:0}
+#ena-desktop-root .ena-dossier-field-content .ena-beta-record{margin:0 0 5px}
+#ena-desktop-root .ena-dossier-history{margin:4px 0 10px;padding:6px 9px;background:#e1dfd9;border:1px solid #b4b0a8}
+#ena-desktop-root .ena-dossier-history>summary{cursor:pointer;color:#294673;font-weight:bold}
+#ena-desktop-root .ena-dossier-wardrobe{margin-top:8px;border:1px solid #a4a19c;background:#e6e3dc}
+#ena-desktop-root .ena-dossier-wardrobe>summary{cursor:pointer;background:#d3d8df;color:#253c63;font-weight:bold;padding:11px 13px}
+#ena-desktop-root .ena-dossier-wardrobe[open]>summary{border-bottom:1px solid #9c9c97}
+#ena-desktop-root .ena-dossier-wardrobe-items{padding:10px 12px}
+#ena-desktop-root .ena-dossier-wardrobe-items button[data-beta="new-wardrobe"]{padding:7px 12px;border:2px solid;border-color:#fff #777 #777 #fff;background:#d4d2cc;color:#1d1d1d;cursor:pointer}
+#ena-desktop-root .ena-dossier-wardrobe-items .ena-beta-record{margin-bottom:7px}
+@media(max-width:700px){#ena-desktop-root .ena-dossier-field-row{grid-template-columns:1fr;gap:1px}#ena-desktop-root .ena-dossier-field-label{padding:4px 0 0}}
