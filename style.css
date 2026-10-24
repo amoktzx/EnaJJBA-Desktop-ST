@@ -326,3 +326,15 @@
 #ena-desktop-root .ena-proposal-select{display:inline-flex;align-items:center;gap:6px;margin:0 0 8px;cursor:pointer;font-size:12px;color:#253959;}
 #ena-desktop-root .ena-proposal-select input{width:16px;height:16px;accent-color:#203d78;}
 #ena-desktop-root .ena-beta-space select[data-beta-setting="detailLevel"]{max-width:100%;width:100%;}
+
+/* Beta 5.6 — visible state histories, high-contrast readable captions */
+#ena-desktop-root .ena-state-record{border-left:4px solid #526a94;background:#f0eee8;}
+#ena-desktop-root .ena-state-record .ena-beta-record-main{flex-wrap:wrap;align-items:baseline;}
+#ena-desktop-root .ena-state-record p{white-space:pre-wrap;line-height:1.42;color:#292d35;}
+#ena-desktop-root .ena-state-record small{color:#52565e;}
+#ena-desktop-root .ena-state-record details{margin-top:9px;border-top:1px dotted #aaa8a2;padding-top:8px;}
+#ena-desktop-root .ena-state-record details>summary{cursor:pointer;font-weight:bold;color:#24457a;}
+#ena-desktop-root .ena-state-event{padding:7px 9px;margin:5px 0;background:#e2ded5;border-left:3px solid #7385a4;line-height:1.4;}
+#ena-desktop-root .ena-entity-hint{display:block;color:#3d526c!important;margin:4px 0!important;}
+#ena-desktop-root .ena-beta-fact-edit{color:#242831;}
+#ena-desktop-root .ena-beta-fact-edit>p{margin:5px 0;line-height:1.35;color:#454a55;}
