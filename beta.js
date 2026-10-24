@@ -1,5 +1,5 @@
 /* Ena Desktop 1.0 Beta: locally editable applications, provenance, rollback and AI review. */
-import {digest,messageKey,validateEvidence,safeMoney,parseExtraction} from './betaCore.js';
+import {digest,messageKey,messageText,messageSourceStats,validateEvidence,safeMoney,parseExtraction} from './betaCore.js';
 import {identityKeys,canPropose,exportFullSnapshot,validateFullSnapshot,countsFor} from './factLedger.js';
 
 const TABLES={
@@ -178,7 +178,9 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     const reason=f.lastError?`<div class="ena-beta-warning ena-fullscan-error" role="alert"><b>Почему проверка остановилась:</b> ${encode(f.lastError)}<br><small>Блок с позиции #${Number(f.failedStart??f.cursor)+1}. Завершённые блоки сохранены. ${f.chunkSize?`Размер следующей порции: ${f.chunkSize} сообщений.`:''} Если причина связана с API/лимитом, не нажимай «Продолжить» многократно.</small></div>`:'';
     const progressBar=f.total?`<div class="ena-scan-progress" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"><span style="width:${progress}%"></span></div><p>Полный проход: ${f.cursor||0} / ${f.total||0} сообщений · ${progress}% · блоков ${f.blocks||0} · новых предложений ${f.added||0} · ${encode(f.status||'')} · размер порции: ${Number(f.chunkSize)||Number(s.interval)||50}</p>${reason}`:'';
     const dg=b.scanDiagnostics||{},discardText=Object.entries(dg.discarded||{}).map(([k,v])=>`${encode(k)}: ${Number(v)}`).join(' · ');
-    const diagnostics=`<section class="ena-beta-warning" style="margin-top:10px;padding:10px"><b>Диагностика извлечения • без сохранения новых фактов</b><p>Один тест = один API-запрос, ориентировочно 8–10 сообщений. Текущая позиция полной проверки не меняется.</p><button type="button" data-beta="scan-diagnose-early" ${fullScanRunning||extracting?'disabled':''}>Проверить сообщения 1–10</button> <button type="button" data-beta="scan-diagnose-current" ${fullScanRunning||extracting?'disabled':''}>Проверить у позиции ${Number(f.cursor||0)+1}</button>${dg.status==='idle'?'':`<p><b>${encode(dg.status||'')}</b> • сообщения ${Number(dg.start??0)+1}–${Number(dg.end??0)} • модель предложила: ${Number(dg.extracted)||0}, прошло проверку: ${Number(dg.acceptable)||0}, создано: ${Number(dg.added)||0}</p><p>${discardText||'Ошибок проверки нет'}</p>${dg.error?`<p>Ошибка: ${encode(dg.error)}</p>`:''}${dg.status==='empty'?'<p>Модель вернула {"changes":[]}; это не ошибка JSON, но отсутствие событий пока не подтверждено.</p>':''}`}</section>`;
+    const extraStats=(dg.status==='read-inspect'?dg.ranges:dg.sourceStats?[dg.sourceStats]:[])||[];
+    const statsHtml=extraStats.length?`<div class="ena-source-inspect" style="border-top:1px solid #aaa;padding:8px 0;margin-top:8px"><b>Чтение сообщений (без передачи текста в сеть)</b>${extraStats.map(v=>`<p>Диапазон ${Number(v.start)+1}–${Number(v.end)}: из ${v.entries} записей читаемых ${v.text}, системных ${v.system}, пустых/пропущенных ${v.empty}; через mes ${v.mes}, запасные поля ${v.fallback}.</p>${(v.samples||[]).map(x=>`<small>#${x.index}: ${encode(x.type)}, is_system=${x.is_system}, длина=${x.length}; mes:${encode(x.mesType||'—')}, text:${encode(x.textType||'—')}, content:${encode(x.contentType||'—')}; поля: ${encode((x.keys||[]).join(', '))}</small>`).join('<hr>')}`).join('')}</div>`:'';
+    const diagnostics=`<section class="ena-beta-warning" style="margin-top:10px;padding:10px"><b>Диагностика извлечения • без сохранения новых фактов</b><p>Один тест = один API-запрос, ориентировочно 8–10 сообщений. Текущая позиция полной проверки не меняется.</p><button type="button" data-beta="scan-read-inspect">Чтение чата (0 API-запросов)</button> <button type="button" data-beta="scan-diagnose-early" ${fullScanRunning||extracting?'disabled':''}>Проверить сообщения 1–10</button> <button type="button" data-beta="scan-diagnose-current" ${fullScanRunning||extracting?'disabled':''}>Проверить у позиции ${Number(f.cursor||0)+1}</button>${dg.status==='idle'?'':`<p><b>${encode(dg.status||'')}</b> • сообщения ${Number(dg.start??0)+1}–${Number(dg.end??0)} • модель предложила: ${Number(dg.extracted)||0}, прошло проверку: ${Number(dg.acceptable)||0}, создано: ${Number(dg.added)||0}</p><p>${discardText||'Ошибок проверки нет'}</p>${dg.error?`<p>Ошибка: ${encode(dg.error)}</p>`:''}${dg.status==='empty'?'<p>Модель вернула {"changes":[]}; это не ошибка JSON, но отсутствие событий пока не подтверждено.</p>':''}`}${statsHtml}</section>`;
     return `<div class="ena-content ena-scroll ena-beta-space"><div class="ena-beta-banner"><b>Источник ИИ: ${encode(selectedProviderLabel())}</b><p>Выбранный профиль GM не переключает модель рассказчика. Результаты записываются только после твоего подтверждения.</p>${profileSelect()}<p>Обработано блоков: ${b.syncRuns||0}; сообщений в чате: ${c.length}; текущая позиция: ${b.syncCursor===null?'ещё не задана':b.syncCursor}.</p></div>
       <div class="ena-beta-controls"><button data-beta="scan-last" ${extracting?'disabled':''}>Последние ${Number(s.interval||50)} сообщений</button><button data-beta="scan-new" ${extracting?'disabled':''}>Новые сообщения</button>${work}<button data-beta="export">⬇ Полный экспорт JSON</button><button type="button" data-beta="choose-import">⬆ Импорт JSON</button><input class="ena-beta-file-hidden" data-beta-input="import" type="file" accept="application/json,.json"></div>
       <div class="ena-beta-notice">Полная проверка выполняется порциями по ${Number(s.interval)||50} сообщений через выбранный API-профиль. Каждая порция — отдельный платный запрос; можно остановить и возобновить. Принятые, на рассмотрении и отклонённые предложения блокируют повторное появление по тому же источнику и цитате. Удалённые — не блокируют. Импорт/экспорт включает ВСЮ базу со статусами и историей.</div>${progressBar}${diagnostics}
@@ -198,6 +200,7 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     if(type==='scan-all'){void scanWholeChat(false);return true;}
     if(type==='scan-resume'){void scanWholeChat(true);return true;}
     if(type==='scan-stop'){fullScanStop=true;toast('Остановка после текущего запроса');return true;}
+    if(type==='scan-read-inspect'){inspectChatRead();return true;}
     if(type==='scan-diagnose-early'||type==='scan-diagnose-current'){
       if(fullScanRunning||extracting){toast('Дождись окончания текущего запроса');return true;}
       const b=state(),start=type==='scan-diagnose-early'?0:Math.min(b.fullScan?.cursor||0,Math.max(0,messages().length-1));
@@ -260,13 +263,13 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
         p.status='split';p.splitAt=dateTime();
         for(const part of parts){
           // Never preserve a quote from another message after the evidence was split.
-          const quote=part.sources.some(src=>messages().some(m=>messageKey(m)===src.key&&String(m.mes||'').includes(p.quote||'__quote-missing__')))?p.quote:'';
+          const quote=part.sources.some(src=>messages().some(m=>messageKey(m)===src.key&&messageText(m).includes(p.quote||'__quote-missing__')))?p.quote:'';
           state().proposals.push({...p,...part,quote,id:key(),status:'pending',signature:digest([part.scope,part.factType,part.title,part.detail,...part.sources.map(x=>x.key)].join('|')),splitFrom:p.id,created:dateTime()});
         }
         queueHistory('Разделено на два факта: '+p.title);
       }else{
         const part=parts[0];if(!p.originalBeforeEdit)p.originalBeforeEdit={title:p.title,detail:p.detail,scope:p.scope,factType:p.factType||'objective',sources:p.sources};
-        Object.assign(p,part);if(p.quote&&!p.sources.some(src=>messages().some(m=>messageKey(m)===src.key&&String(m.mes||'').includes(p.quote))))p.quote='';p.signature=digest([p.scope,p.factType,p.title,p.detail,...p.sources.map(x=>x.key)].join('|'));
+        Object.assign(p,part);if(p.quote&&!p.sources.some(src=>messages().some(m=>messageKey(m)===src.key&&messageText(m).includes(p.quote))))p.quote='';p.signature=digest([p.scope,p.factType,p.title,p.detail,...p.sources.map(x=>x.key)].join('|'));
         queueHistory('Исправлено предложение: '+p.title);
       }
       proposalEditor=null;saveMeta();fillWindow('gm');toast(split?'Созданы два независимых предложения':'Предложение изменено');return true;
@@ -399,12 +402,17 @@ export function createBeta({meta,ctx,settings,persistSettings,saveMeta,toast,fil
     if(extracting)return null;
     const c=ctx();if(!c){toast('SillyTavern недоступна');return null;}
     const bag=activeChatKey(),b=state(),chat=messages(),end=Math.min(chat.length,start+limit);
-    const portion=chat.slice(start,end).map((x,i)=>({index:start+i,key:messageKey(x),speaker:x.is_user?'Ена/пользователь':'Рассказчик',text:(()=>{const m=String(x.mes||'');return m.length>5000?m.slice(0,2600)+'\n[... фрагмент длинного сообщения пропущен ...]\n'+m.slice(-2300):m;})()})).filter(x=>x.key&&x.text.trim());
+    const portion=chat.slice(start,end).map((x,i)=>({index:start+i,key:messageKey(x),speaker:x.is_user?'Ена/пользователь':'Рассказчик',text:(()=>{const m=messageText(x);return m.length>5000?m.slice(0,2600)+'\n[... фрагмент длинного сообщения пропущен ...]\n'+m.slice(-2300):m;})()})).filter(x=>x.key&&x.text.trim());
     if(end<=start)return {next:end,added:0};
     if(!portion.length){
-      if(dryRun){b.scanDiagnostics={status:'no-message',start,end,extracted:0,acceptable:0,added:0,discarded:{}};saveMeta();}
-      else if(updateCursor){b.syncCursor=Math.max(b.syncCursor??0,end);saveMeta();}
-      return {next:end,added:0};
+      const sample=messageSourceStats(chat,start,limit);
+      const reason=`Нет читаемых сообщений в блоке ${start+1}–${end}. Доступны: ${sample.text}/${sample.entries}, системных: ${sample.system}, без текста: ${sample.empty}. Просканировать этот блок нельзя.`;
+      b.scanDiagnostics={status:'no-message',start,end,extracted:0,acceptable:0,added:0,discarded:{},sourceStats:sample,error:reason};
+      if(fullScanRunning){b.fullScan.lastError=reason;b.fullScan.failedStart=start;b.fullScan.status='paused';}
+      saveMeta();
+      toast('Блок не прочитан: проверь «Чтение чата (0 API)»');
+      // Return null: never advance the paid-scan cursor over unreadable text.
+      return null;
     }
     extracting=true;toast('Проверяю сообщения '+(start+1)+'–'+end+' · '+selectedProviderLabel());if(ui.windows.has('gm'))fillWindow('gm');
     const system=`Ты — ENA DESKTOP GM EXTRACTOR, строгий архивариус реально сыгранной ролевой истории JoJo: Golden Wind, Неаполь 2001. Ты НЕ рассказчик: не продолжай историю, не дописывай сцены, не придумывай сюжет. Получишь массив сообщений с id m0, m1... и text. Источником являются ТОЛЬКО эти сообщения. Верни ТОЛЬКО валидный JSON-объект: {"changes":[{"scope":"gm:events","factType":"objective","title":"Краткое название","detail":"Проверенное изменение состояния","message_ids":["m0"],"quote":"дословная короткая цитата из сообщения m0","confidence":"high","progress":"completed","owned":false}]}. Если изменений нет — {"changes":[]}. Никакого Markdown, кодовых блоков, комментариев и текста за пределами объекта.
@@ -512,6 +520,14 @@ progress выбирай по тексту: planned для планов; in_progr
         toast('Проверка приостановлена: смотри причину в GM → Синхронизация');
       }
     }finally{fullScanRunning=false;fullScanStop=false;if(ui.windows.has('gm'))fillWindow('gm');}
+  }
+  function inspectChatRead(){
+    const chat=messages(), f=state().fullScan||{}, pos=Math.max(0,Math.min(chat.length-1,Number(f.cursor)||0));
+    const ranges=[messageSourceStats(chat,0,10),messageSourceStats(chat,pos,10),messageSourceStats(chat,0,Math.min(100,chat.length))];
+    state().scanDiagnostics={status:'read-inspect',ranges,start:pos,end:Math.min(chat.length,pos+10),extracted:0,acceptable:0,added:0,discarded:{}};
+    saveMeta();if(ui.windows.has('gm'))fillWindow('gm');
+    toast('Чтение чата проверено локально (0 API-запросов)');
+    return ranges;
   }
   function updateEvents(){clearTimeout(pendingTimer);pendingTimer=setTimeout(()=>{const bag=activeChatKey();if(!bag)return;markInvalid();const b=state(),count=messages().length;
       if(b.syncCursor===null){b.syncCursor=count;saveMeta();}

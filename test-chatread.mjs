@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {messageKey,messageText,messageSourceStats,digest} from './betaCore.js';
+import {createBeta} from './beta.js';
+const old={mes:'Ена получила письмо от Бруно',send_date:'2001-04-30',swipe_id:0,is_user:true};
+assert.equal(messageKey(old),digest([old.send_date,'user',old.mes,0].join('\u241f')),'Old mes hash must remain compatible');
+assert.equal(messageText({text:'Текст нового формата'}),'Текст нового формата');
+assert.equal(messageText({content:[{type:'text',text:'Факт о диске'}]}),'Факт о диске');
+assert.equal(messageText({message:{content:'Бруно передал ключ'}}),'Бруно передал ключ');
+assert.equal(messageText({swipes:['Текст свайпа'],swipe_id:0}),'Текст свайпа');
+assert.equal(messageKey({is_system:true,mes:'Системный промпт'}),'');
+const chat=[{text:'Ена нашла два диска.',send_date:'2001-04-30',is_user:true},{content:[{type:'text',text:'Леоне увидел диски.'}],send_date:'2001-04-30'},{mes:'',is_user:false},{is_system:true,mes:'Системное'}];
+const st=messageSourceStats(chat,0,4);
+assert.equal(st.text,2);assert.equal(st.system,1);assert.equal(st.empty,2);assert.equal(st.fallback,2);
+let requests=0;const memory={archive:{films:[],music:[],books:[],anomalies:[]},salon:{},directory:{},gm:{}};
+const config={enaSync:{automatic:false,interval:50,profileId:'active'}};
+const context={chat,chatId:'Naples',characterId:1,generateRaw:async({prompt})=>{requests++;return JSON.stringify({changes:[{scope:'gm:inventory',factType:'objective',title:'Два диска',detail:'Ена нашла два диска',quote:'нашла два диска',message_ids:['m0'],confidence:'high'}]});}};
+const b=createBeta({meta:()=>memory,ctx:()=>context,settings:()=>config,persistSettings:()=>{},saveMeta:()=>{},toast:()=>{},fillWindow:()=>{},ui:{windows:new Map(),tab:{gm:'sync'}},oldComputer:()=>'',oldNotes:()=>''});
+globalThis.confirm=()=>true;
+const press=type=>b.action(type,{closest:()=>({}),dataset:{}});
+press('scan-read-inspect');assert.equal(requests,0);assert.equal(b.state().scanDiagnostics.status,'read-inspect');assert.match(b.view('gm'),/Чтение сообщений/);
+press('scan-diagnose-early');await new Promise(r=>setTimeout(r,80));assert.equal(requests,1);assert.equal(b.state().scanDiagnostics.status,'ok');assert.equal(b.state().scanDiagnostics.acceptable,1);assert.equal(b.state().proposals.length,0);assert.equal(b.state().fullScan.cursor,0);
+// Entirely unreadable blocks must NEVER move the full-scan cursor or send requests.
+context.chat=[{is_system:true,mes:'a'}, {mes:''},{message:{}}];
+press('scan-all');await new Promise(r=>setTimeout(r,80));assert.equal(requests,1);assert.equal(b.state().fullScan.status,'paused');assert.equal(b.state().fullScan.cursor,0);assert.match(b.state().fullScan.lastError,/Нет читаемых сообщений/);
+console.log('ChatRead: original hashes, fallback fields, free inspection, dry-run, and unreadable-block guard: PASS');

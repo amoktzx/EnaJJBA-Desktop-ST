@@ -4,9 +4,56 @@ export function digest(value) {
   for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),16777619)>>>0;}
   return h.toString(36);
 }
+// SillyTavern normally provides `mes`, but imported or extension-provided
+// chat contexts can expose plain text in `text` or `content`. Never serialize
+// an arbitrary object as "[object Object]" and mistake that for roleplay text.
+export function messageText(message){
+  if(!message || typeof message!=='object')return typeof message==='string'?message:'';
+  for(const name of ['mes','text','content','message']){
+    const value=message[name];
+    if(typeof value==='string' && value.trim())return value;
+    if(value && typeof value==='object'){
+      if(typeof value.text==='string' && value.text.trim())return value.text;
+      if(typeof value.content==='string' && value.content.trim())return value.content;
+      if(Array.isArray(value)){
+        const combined=value.map(x=>typeof x==='string'?x:(x?.type==='text'&&typeof x.text==='string'?x.text:'')).filter(Boolean).join('\n');
+        if(combined.trim())return combined;
+      }
+    }
+  }
+  if(Array.isArray(message.swipes)&&message.swipes.length){
+    const selected=message.swipes[Number(message.swipe_id)||0];
+    if(typeof selected==='string'&&selected.trim())return selected;
+  }
+  return '';
+}
 export function messageKey(message){
-  if(!message || message.is_system) return '';
-  return digest([message.send_date??'',message.is_user?'user':'assistant',String(message.mes??''),message.swipe_id??''].join('\u241f'));
+  if(!message || message.is_system===true) return '';
+  const text=messageText(message);
+  if(!text.trim())return '';
+  return digest([message.send_date??'',message.is_user?'user':'assistant',text,message.swipe_id??''].join('\u241f'));
+}
+export function messageSourceStats(chat,start=0,limit=10){
+  const list=Array.isArray(chat)?chat:[];
+  const section=list.slice(start,start+limit);
+  const result={start,end:Math.min(list.length,start+limit),total:list.length,entries:section.length,
+    system:0,text:0,empty:0,mes:0,fallback:0,swipes:0,other:0,
+    samples:[]};
+  for(let i=0;i<section.length;i++){
+    const m=section[i];
+    const isObj=m&&typeof m==='object';
+    if(!isObj){result.other++;if(result.samples.length<3)result.samples.push({index:start+i+1,type:typeof m,keys:[],is_system:false,length:typeof m==='string'?m.length:0});continue;}
+    const keys=Object.keys(m);
+    const system=m.is_system===true;
+    if(system)result.system++;
+    const text=messageText(m);
+    if(text.trim()&&!system){result.text++;if(typeof m.mes==='string'&&m.mes.trim())result.mes++;else result.fallback++;}
+    else result.empty++;
+    if(Array.isArray(m.swipes)&&m.swipes.length)result.swipes++;
+    if(result.samples.length<3)result.samples.push({index:start+i+1,type:'object',keys:keys.slice(0,12),is_system:system,length:text.length,
+      mesType:typeof m.mes,textType:typeof m.text,contentType:typeof m.content});
+  }
+  return result;
 }
 export function validateEvidence(sources,chat){
   if(!Array.isArray(sources)||!sources.length)return true; // manually entered, no provenance
